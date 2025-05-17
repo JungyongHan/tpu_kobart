@@ -350,7 +350,7 @@ def train_kobart(rank, args):
         start_time = time.time()
         
         for step, batch in enumerate(train_loader):
-            with xm.step():
+            with torch_xla.step():
                 # 그래디언트 초기화
                 optimizer.zero_grad()
                 
