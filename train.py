@@ -185,14 +185,15 @@ def train_kobart(rank, args):
     device = xm.xla_device()
     
     # 마스터 프로세스 확인
-    
-    if is_master := rank == 0:
-        print("Starting training on TPU core 0")
-        os.environ["PT_XLA_DEBUG_LEVEL"] = 2
-
+        
     if is_local_master := xm.is_master_ordinal():
         logger.info(f"Starting training on TPU core {rank}")
         os.makedirs(args.checkpoint, exist_ok=True)
+    
+    if is_master := xm.is_master_ordinal(False):
+        logger.info("Starting training on TPU core 0")
+        os.environ["PT_XLA_DEBUG_LEVEL"] = 2
+        is_local_master = True
     
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v2')
@@ -262,6 +263,7 @@ def train_kobart(rank, args):
     # DDP 모델 설정
     model = torch.nn.parallel.DistributedDataParallel(
         model,
+        broadcast_buffers=False,
         gradient_as_bucket_view=True
     )
     
