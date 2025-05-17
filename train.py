@@ -187,7 +187,7 @@ def train_kobart(rank, args):
     
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
-    if os.path.exists(args.train_file):
+    if os.path.exists(args.test_file):
         val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
 
         val_sampler = torch.utils.data.distributed.DistributedSampler(
