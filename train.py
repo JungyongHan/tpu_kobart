@@ -250,12 +250,6 @@ def train_kobart(rank, args):
 
     xm.broadcast_master_param(model)
     
-    # DDP 모델 설정
-    model = torch.nn.parallel.DistributedDataParallel(
-        model,
-        broadcast_buffers=False,
-        gradient_as_bucket_view=True
-    )
     
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
@@ -339,7 +333,7 @@ def train_kobart(rank, args):
         
         for step, batch in enumerate(train_loader):
             optimizer.zero_grad()
-            loss = train_step(model.module, batch, optimizer, device)
+            loss = train_step(model, batch, optimizer, device)
             
             if args.gradient_clip_val > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
