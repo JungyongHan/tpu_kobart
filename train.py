@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch_xla
-import torch_xla.amp
+from torch_xla.amp import syncfree, autocast
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
@@ -116,9 +116,9 @@ def train_step(model, batch, optimizer, device):
     labels = batch['labels'].to(device)
     
     # 순전파
-    with torch_xla.amp.autocast(xm.xla_device()):
+    with autocast(xm.xla_device()):
         outputs = model(input_ids, decoder_input_ids, labels)
-        with torch_xla.amp.autocast(xm.xla_device(), enabled=False):
+        with autocast(xm.xla_device(), enabled=False):
             loss = outputs.loss
     # 역전파
     loss.backward()
@@ -264,7 +264,7 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = torch_xla.amp.syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
 
 
