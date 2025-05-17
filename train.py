@@ -360,7 +360,7 @@ def train_kobart(rank, args):
                         run_async=True
                     )
         if is_local_master:
-            avg_loss = loss_sum.item() / epoch_steps
+            avg_loss = epoch_loss_sum.item() / epoch_steps
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
     xm.rendezvous('init')
 
