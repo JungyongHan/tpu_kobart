@@ -149,8 +149,7 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
-    checkpoint_path = os.path.join(args.checkpoint, f"model_epoch_{epoch}_step_{step}{val_loss:.4f if val_loss is not None else ''}")
-    os.makedirs(checkpoint_path, exist_ok=True)
+    os.makedirs(args.checkpoint, exist_ok=True)
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
@@ -163,18 +162,8 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, v
         'scheduler': scheduler.state_dict(),
         'epoch': epoch,
         'step': step,
-        'val_loss': val_loss
-    }, os.path.join(checkpoint_path, 'training_state.pt'))
+    }, os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt'))
     
-
-    # last.pt 파일 복제 (이어서 학습하기 위한 용도)
-    last_path = os.path.join(args.checkpoint, "last.pt")
-    shutil.copy(os.path.join(checkpoint_path, 'training_state.pt'), last_path)
-
-    tokenizer.save_pretrained(args.checkpoint)
-    
-    logger.info(f"Checkpoint saved at {checkpoint_path}")
-
 
 def train_kobart(rank, args):
     # 시드 설정
@@ -297,16 +286,18 @@ def train_kobart(rank, args):
     best_val_loss = float('inf')
     
     if args.resume_from_checkpoint:
-        last_path = os.path.join(args.checkpoint, "last.pt")
-        if os.path.exists(last_path):
-            checkpoint = torch.load(last_path, map_location='cpu')
+        # 마지막 체크포인트 로드 checkpoint_{epoch}.pt
+        files = os.listdir(args.checkpoint)
+        checkpoint_files = [f for f in files if f.startswith('checkpoint_') and f.endswith('.pt')]
+        checkpoint_files.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
+        model_path = checkpoint_files[-1] if checkpoint_files else None
+
+        if os.path.exists(model_path):
+            checkpoint = torch.load(model_path, map_location='cpu')
             
             if is_master:
                 logger.info(f"Loading model from {model_path}")
             
-            # 모델 로드
-            # model.module = BartForConditionalGeneration.from_pretrained(model_path)
-            # model.module.to(device)
             if hasattr(model, "module"):
                 state_dict = model.module.state_dict()
             else:
@@ -335,7 +326,6 @@ def train_kobart(rank, args):
             
             start_epoch = checkpoint['epoch']
             global_step = checkpoint['step']
-            best_val_loss = checkpoint.get('val_loss', float('inf'))
             
             if is_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
@@ -364,10 +354,7 @@ def train_kobart(rank, args):
                 if args.gradient_clip_val > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
                 
-                # 옵티마이저 스텝
-                # xm.optimizer_step(optimizer)
                 optimizer.step()
-                # 스케줄러 업데이트
                 scheduler.step()
 
                 # 손실 누적
@@ -385,24 +372,15 @@ def train_kobart(rank, args):
                         args=(epoch, global_step, total_steps, avg_loss, elapsed),
                         run_async=True
                     )
-                            
-                # # 정기적인 체크포인트 저장
-                # if is_local_master and global_step % args.save_steps == 0:
-                #     save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
-        # 에폭 종료 후 평가
-        val_loss = validate(model.module, val_loader, device)
-        # 모든 프로세스에서 동기화
-        val_loss = xm.mesh_reduce('val_loss', val_loss, lambda x: sum(x) / len(x))
-        xm.mark_step()
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
-            logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
-            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
+            logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Time: {epoch_time:.2f}s")
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args)
             logger.info(f'{rank}:saved DONE')
-        logger.info(f"{rank} device wating...")
-        dist.barrier(group=gloo_group)
-        logger.info(f"{rank}:im free~")
+        # logger.info(f"{rank} device wating...")
+        # dist.barrier(group=gloo_group)
+        # logger.info(f"{rank}:im free~")
 
 
     if is_local_master:
