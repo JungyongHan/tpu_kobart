@@ -11,7 +11,7 @@ import torch.distributed as dist
 import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
-import torch_xla.distributed.xla_launch as xla_launch
+import torch_xla.distributed.xla_backend
 
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup
@@ -59,10 +59,6 @@ class ArgsBase():
                             type=float,
                             default=3e-5,
                             help='The initial learning rate')
-        parser.add_argument('--num_tpu_cores',
-                            type=int,
-                            default=16,
-                            help='number of TPU cores/slices')
         parser.add_argument('--gradient_clip_val',
                             type=float,
                             default=1.0,
@@ -157,13 +153,14 @@ def validate(model, val_loader, device):
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
     checkpoint_path = os.path.join(args.checkpoint, f"model_epoch_{epoch}_step_{step}")
     os.makedirs(checkpoint_path, exist_ok=True)
-    
-    # 모델 저장
-    model.model.save_pretrained(checkpoint_path)
-    tokenizer.save_pretrained(checkpoint_path)
+    if hasattr(model, "module"):
+        state_dict = model.module.state_dict()
+    else:
+        state_dict = model.state_dict()
     
     # 옵티마이저, 스케줄러 상태 저장
     xm.save({
+        'model':state_dict,
         'optimizer': optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
         'epoch': epoch,
@@ -174,21 +171,22 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, v
     # last.pt 파일 생성 (이어서 학습하기 위한 용도)
     last_path = os.path.join(args.checkpoint, "last.pt")
     xm.save({
-        'model_path': checkpoint_path,
+        'model': state_dict,
         'optimizer': optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
         'epoch': epoch,
         'step': step,
         'val_loss': val_loss
     }, last_path)
+    tokenizer.save_pretrained(args.checkpoint)
     
     logger.info(f"Checkpoint saved at {checkpoint_path}")
 
 
 def train_kobart(rank, args):
     # 시드 설정
-    torch.manual_seed(42 + rank)
-    np.random.seed(42 + rank)
+    torch.manual_seed(42)
+    np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
     # 디바이스 설정
     device = xm.xla_device()
@@ -289,14 +287,34 @@ def train_kobart(rank, args):
         last_path = os.path.join(args.checkpoint, "last.pt")
         if os.path.exists(last_path):
             checkpoint = torch.load(last_path, map_location='cpu')
-            model_path = checkpoint['model_path']
             
             if is_master:
                 logger.info(f"Loading model from {model_path}")
             
             # 모델 로드
-            model.module.model = BartForConditionalGeneration.from_pretrained(model_path)
-            model.module.model.to(device)
+            # model.module.model = BartForConditionalGeneration.from_pretrained(model_path)
+            # model.module.model.to(device)
+            if hasattr(model, "module"):
+                state_dict = model.module.state_dict()
+            else:
+                state_dict = model.state_dict()
+            check_model_state = checkpoint['model']
+            new_state_dict = {}
+
+            for k, v in state_dict.items():
+                try:
+                    new_state_dict[k] = check_model_state[k]
+                    assert v.shape == check_model_state[k].shape, (
+                        check_model_state[k].shape,
+                        v.shape
+                    )
+                except:
+                    print(f"{k} is not int the checkpoint model")
+                    new_state_dict[k] = v
+            if hasattr(model, "module"):
+                model.module.load_state_dict(new_state_dict)
+            else:
+                model.load_state_dict(new_state_dict)
             
             # 옵티마이저, 스케줄러 상태 로드
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -353,7 +371,7 @@ def train_kobart(rank, args):
                         
             # 정기적인 체크포인트 저장
             if is_local_master and global_step % args.save_steps == 0:
-                save_checkpoint(model.module, tokenizer, optimizer, scheduler, epoch, global_step, args)
+                save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
         
         # 에폭 종료 후 평가
         val_loss = validate(model.module, val_loader, device)
@@ -366,7 +384,7 @@ def train_kobart(rank, args):
             epoch_time = time.time() - start_time
             logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             # 에폭 종료 후 체크포인트 저장
-            save_checkpoint(model.module, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
             # 최고 성능 모델 저장
             if val_loss < best_val_loss:
@@ -401,4 +419,4 @@ if __name__ == '__main__':
     logger.info(args)
     
     # TPU 분산 학습 시작 (xla.launch 사용)
-    xla_launch.launch(_mp_fn, args=(args,), nprocs=args.num_tpu_cores)
+    torch_xla.launch(_mp_fn, args=(args,))
