@@ -84,7 +84,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
@@ -258,7 +258,7 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr * xr.world_size())
 
 
 
