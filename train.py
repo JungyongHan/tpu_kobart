@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import os
-os.environ["PJRT_DEVICE"] = "TPU"
+
 
 import time
 from loguru import logger
