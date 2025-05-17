@@ -84,7 +84,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
@@ -118,7 +118,7 @@ def train_step(model, batch, optimizer, device):
     # 순전파
     with torch_xla.amp.autocast(xm.xla_device()):
         outputs = model(input_ids, decoder_input_ids, labels)
-        with torch_xla.amp.autocast(xm.xla_device(), enabled=False):
+        with torch_xla.amp.autocast(xm.xla_device(), dtype=torch.float32):
             loss = outputs.loss
     # 역전파
     loss.backward()
@@ -355,13 +355,14 @@ def train_kobart(rank, args):
                 
                 # 로깅 (비동기적으로 처리)
                 if is_local_master and (global_step - 1) % args.logging_steps == 0:
+                    avg_loss = epoch_loss_sum.item() / epoch_steps
+                    print(avg_loss)
                     xm.add_step_closure(
                         _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
                         run_async=True
                     )
         if is_local_master:
             avg_loss = epoch_loss_sum.item() / epoch_steps
-            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {time.time()-start_time:.2f}s, Loss: {avg_loss:.4f}", flush=True)
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
     xm.rendezvous('init')
 
