@@ -347,7 +347,7 @@ def train_kobart(rank, args):
     for epoch in range(start_epoch, args.max_epochs):
         epoch_loss = 0
         epoch_steps = 0
-        
+        logger.info(f"{rank}:im starting~")
         # 에폭 시작 시간
         start_time = time.time()
         
