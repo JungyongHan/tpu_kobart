@@ -19,7 +19,7 @@ class KoBARTSummaryDataset(Dataset):
         self.max_len = max_len
         self.docs = pd.read_csv(file)
         # 개행문자를 위한 특수 토큰 정의
-        self.newline_token = '<newline>'
+        self.newline_token = '<NL>'
         self.docs = self.preprocess_data(self.docs)
         self.len = self.docs.shape[0]
 
@@ -117,7 +117,6 @@ class KoBARTSummaryDataset(Dataset):
     
     def __getitem__(self, idx):
         instance = self.docs.iloc[idx]
-        # add special tokens \n will be '<newline>'
         instance['script'] = instance['script'].replace('\n', self.newline_token)
         input_ids = self.tokenizer.encode(instance['article'])
         input_ids = self.add_padding_data(input_ids)

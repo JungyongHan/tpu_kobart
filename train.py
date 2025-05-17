@@ -188,7 +188,7 @@ def train_kobart(rank, args):
     
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v2')
-    special_tokens_dict = {'additional_special_tokens': ['<newline>']}
+    special_tokens_dict = {'additional_special_tokens': ['<NL>']}
     tokenizer.add_special_tokens(special_tokens_dict)
     
     # 데이터셋 및 데이터로더 설정
@@ -338,7 +338,6 @@ def train_kobart(rank, args):
     for epoch in range(start_epoch, args.max_epochs):
         epoch_loss = 0
         epoch_steps = 0
-        logger.info(f"{rank}:im starting~")
         # 에폭 시작 시간
         start_time = time.time()
         
@@ -369,15 +368,12 @@ def train_kobart(rank, args):
                     # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
                     xm.add_step_closure(
                         _log_summary,
-                        args=(epoch, global_step, total_steps, avg_loss, elapsed),
+                        args=(epoch, step, total_steps, avg_loss, elapsed),
                         run_async=True
                     )
+
         if is_local_master:
-            epoch_avg_loss = epoch_loss / epoch_steps
-            epoch_time = time.time() - start_time
-            logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Time: {epoch_time:.2f}s")
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args)
-            logger.info(f'{rank}:saved DONE')
         # logger.info(f"{rank} device wating...")
         # dist.barrier(group=gloo_group)
         # logger.info(f"{rank}:im free~")
