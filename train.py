@@ -264,7 +264,7 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = torch_xla.amp.syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
 
 
@@ -344,9 +344,8 @@ def train_kobart(rank, args):
             if args.gradient_clip_val > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
             
-            optimizer.step()
-            scheduler.step()
-
+            xm.optimizer_step(optimizer)
+            
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.item()
             epoch_steps += 1
@@ -365,6 +364,7 @@ def train_kobart(rank, args):
             avg_loss = epoch_loss / epoch_steps
             print(avg_loss)
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
+        scheduler.step()
     xm.rendezvous('init')
 
     if is_local_master:
