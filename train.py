@@ -16,12 +16,6 @@ import torch_xla.distributed.xla_backend
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup
 
-# 데이터셋 클래스 임포트
-sys_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if sys_path not in sys.path:
-    sys.path.append(sys_path)
-
-import sys
 from dataset import KoBARTSummaryDataset
 
 parser = argparse.ArgumentParser(description='KoBART Summarization for TPU with Pure PyTorch')
@@ -423,7 +417,7 @@ def _mp_fn(index, args):
 if __name__ == '__main__':
     parser = ArgsBase.add_model_specific_args(parser)
     args = parser.parse_args()
-    
+    os.environ["PJRT_DEVICE"] = "TPU"
     # 학습 시작
     logger.info("Starting TPU distributed training with pure PyTorch")
     logger.info(args)
