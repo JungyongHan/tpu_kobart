@@ -188,10 +188,11 @@ def train_kobart(rank, args):
     device = xm.xla_device()
     
     # 마스터 프로세스 확인
-    is_master = xm.is_master_ordinal(local=False)
-    is_local_master = xm.is_master_ordinal()
     
-    if is_local_master:
+    if is_master := xm.is_master_ordinal(local=False):
+        os.environ["PT_XLA_DEBUG_LEVEL"] = "2"
+
+    if is_local_master := xm.is_master_ordinal():
         logger.info(f"Starting training on TPU core {rank}")
         os.makedirs(args.checkpoint, exist_ok=True)
     
@@ -224,7 +225,8 @@ def train_kobart(rank, args):
         sampler=train_sampler,
         num_workers=args.num_workers,
         drop_last=True,
-        pin_memory=True
+        persistent_workers=True,
+        prefetch_factor=16
     )
     
     val_loader = torch.utils.data.DataLoader(
@@ -233,12 +235,25 @@ def train_kobart(rank, args):
         sampler=val_sampler,
         num_workers=args.num_workers,
         drop_last=True,
-        pin_memory=True
+        persistent_workers=True,
+        prefetch_factor=16
     )
 
     # TPU에 최적화된 데이터로더
-    train_loader = pl.MpDeviceLoader(train_loader, device)
-    val_loader = pl.MpDeviceLoader(val_loader, device)
+    train_loader = pl.MpDeviceLoader(
+        train_loader, 
+        device,
+        loader_prefetch_size=128,
+        device_prefetch_size=1,
+        host_to_device_transfer_threads=4
+    )
+    val_loader = pl.MpDeviceLoader(
+        val_loader, 
+        device,
+        loader_prefetch_size=128,
+        device_prefetch_size=1,
+        host_to_device_transfer_threads=4
+    )
     
     # 모델 설정
     model = KoBARTSummaryModel(tokenizer)
@@ -328,7 +343,6 @@ def train_kobart(rank, args):
 
     # 학습 루프
     for epoch in range(start_epoch, args.max_epochs):
-        train_sampler.set_epoch(epoch)
         epoch_loss = 0
         epoch_steps = 0
         
