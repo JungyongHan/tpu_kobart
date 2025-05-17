@@ -118,7 +118,7 @@ def train_step(model, batch, optimizer, device):
     # 순전파
     with torch_xla.amp.autocast(xm.xla_device()):
         outputs = model(input_ids, decoder_input_ids, labels)
-        with torch_xla.amp.autocast(xm.xla_device(), dtype=torch.float32):
+        with torch_xla.amp.autocast(xm.xla_device(), enabled=False):
             loss = outputs.loss
     # 역전파
     loss.backward()
@@ -264,7 +264,7 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr * xr.world_size())
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
 
 
@@ -338,31 +338,32 @@ def train_kobart(rank, args):
         start_time = time.time()
         
         for step, batch in enumerate(train_loader):
-            with torch_xla.step():
-                optimizer.zero_grad()
-                loss = train_step(model.module, batch, optimizer, device)
-                
-                if args.gradient_clip_val > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
-                
-                optimizer.step()
-                scheduler.step()
+            optimizer.zero_grad()
+            loss = train_step(model.module, batch, optimizer, device)
+            
+            if args.gradient_clip_val > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
+            
+            optimizer.step()
+            scheduler.step()
 
-                # 손실 누적 (텐서 상태 유지)
-                epoch_loss_sum += loss.detach()
-                epoch_steps += 1
-                global_step += 1
-                
-                # 로깅 (비동기적으로 처리)
-                if is_local_master and (global_step - 1) % args.logging_steps == 0:
-                    avg_loss = epoch_loss_sum.item() / epoch_steps
-                    print(avg_loss)
-                    xm.add_step_closure(
-                        _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
-                        run_async=True
-                    )
+            # 손실 누적 (텐서 상태 유지)
+            epoch_loss_sum += loss.detach()
+            epoch_steps += 1
+            global_step += 1
+            
+            # 로깅 (비동기적으로 처리)
+            if is_local_master and (global_step - 1) % args.logging_steps == 0:
+                avg_loss = epoch_loss_sum.item() / epoch_steps
+                print(avg_loss)
+                xm.add_step_closure(
+                    _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
+                    run_async=True
+                )
+            xm.mark_step()
         if is_local_master:
             avg_loss = epoch_loss_sum.item() / epoch_steps
+            print(avg_loss)
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
     xm.rendezvous('init')
 
