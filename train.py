@@ -350,41 +350,41 @@ def train_kobart(rank, args):
         start_time = time.time()
         
         for step, batch in enumerate(train_loader):
-            # 그래디언트 초기화
-            optimizer.zero_grad()
-            
-            # 학습 스텝
-            loss = train_step(model.module, batch, optimizer, device)
-            
-            # 그래디언트 클리핑
-            if args.gradient_clip_val > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
-            
-            # 옵티마이저 스텝
-            # xm.optimizer_step(optimizer)
-            optimizer.step()
-            # 스케줄러 업데이트
-            scheduler.step()
-            xm.mark_step()
+            with xm.step():
+                # 그래디언트 초기화
+                optimizer.zero_grad()
+                
+                # 학습 스텝
+                loss = train_step(model.module, batch, optimizer, device)
 
-            # 손실 누적
-            epoch_loss += loss.item()
-            epoch_steps += 1
-            global_step += 1
-            
-            # 로깅
-            if is_master and global_step % args.logging_steps == 0:
-                avg_loss = epoch_loss / epoch_steps
-                elapsed = time.time() - start_time
-                # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
-                xm.add_step_closure(
-                    _log_summary,
-                    args=(epoch, global_step, avg_loss, elapsed)
-                )
-                        
-            # 정기적인 체크포인트 저장
-            if is_local_master and global_step % args.save_steps == 0:
-                save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
+                # 그래디언트 클리핑
+                if args.gradient_clip_val > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
+                
+                # 옵티마이저 스텝
+                # xm.optimizer_step(optimizer)
+                optimizer.step()
+                # 스케줄러 업데이트
+                scheduler.step()
+
+                # 손실 누적
+                epoch_loss += loss.item()
+                epoch_steps += 1
+                global_step += 1
+                
+                # 로깅
+                if is_master and global_step % args.logging_steps == 0:
+                    avg_loss = epoch_loss / epoch_steps
+                    elapsed = time.time() - start_time
+                    # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
+                    xm.add_step_closure(
+                        _log_summary,
+                        args=(epoch, global_step, avg_loss, elapsed)
+                    )
+                            
+                # # 정기적인 체크포인트 저장
+                # if is_local_master and global_step % args.save_steps == 0:
+                #     save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
         
         # 에폭 종료 후 평가
         val_loss = validate(model.module, val_loader, device)
@@ -396,8 +396,10 @@ def train_kobart(rank, args):
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
             # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
-            xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             # 에폭 종료 후 체크포인트 저장
+            xm.master_print("Saving checkpoint... wait all devices...")
+            xm.wait_device_ops()
+            xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
             # 최고 성능 모델 저장
@@ -409,7 +411,7 @@ def train_kobart(rank, args):
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
         xm.rendezvous("checkpoint_sync")
-        
+
     # 학습 완료 후 최종 모델 저장
     if is_local_master:
         logger.info("Training completed, saving final model...")
