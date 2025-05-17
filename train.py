@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import os
 import datetime
-
+import shutil
 import time
 from loguru import logger
 
@@ -105,7 +105,8 @@ class KoBARTSummaryModel(nn.Module):
     
     def save_pretrained(self, path):
         """내부 모델을 저장하는 메서드"""
-        self.model.save_pretrained(path)
+        self.model.save_model(path)
+
 
 
 def train_step(model, batch, optimizer, device):
@@ -148,7 +149,7 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
-    checkpoint_path = os.path.join(args.checkpoint, f"model_epoch_{epoch}_step_{step}")
+    checkpoint_path = os.path.join(args.checkpoint, f"model_epoch_{epoch}_step_{step}{val_loss:.4f if val_loss is not None else ''}")
     os.makedirs(checkpoint_path, exist_ok=True)
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
@@ -165,16 +166,11 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, v
         'val_loss': val_loss
     }, os.path.join(checkpoint_path, 'training_state.pt'))
     
-    # last.pt 파일 생성 (이어서 학습하기 위한 용도)
+
+    # last.pt 파일 복제 (이어서 학습하기 위한 용도)
     last_path = os.path.join(args.checkpoint, "last.pt")
-    xm.save({
-        'model': state_dict,
-        'optimizer': optimizer.state_dict(),
-        'scheduler': scheduler.state_dict(),
-        'epoch': epoch,
-        'step': step,
-        'val_loss': val_loss
-    }, last_path)
+    shutil.copy(os.path.join(checkpoint_path, 'training_state.pt'), last_path)
+
     tokenizer.save_pretrained(args.checkpoint)
     
     logger.info(f"Checkpoint saved at {checkpoint_path}")
@@ -185,7 +181,7 @@ def train_kobart(rank, args):
     torch.manual_seed(42)
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
-    timeout = datetime.timedelta(seconds=300)
+    timeout = datetime.timedelta(seconds=600)
     gloo_group = dist.new_group(backend='gloo', timeout=timeout)
     # 디바이스 설정
     device = xm.xla_device()
@@ -392,45 +388,29 @@ def train_kobart(rank, args):
                 # # 정기적인 체크포인트 저장
                 # if is_local_master and global_step % args.save_steps == 0:
                 #     save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
-        
-        xm.wait_device_ops()
         # 에폭 종료 후 평가
         val_loss = validate(model.module, val_loader, device)
-        
         # 모든 프로세스에서 동기화
         val_loss = xm.mesh_reduce('val_loss', val_loss, lambda x: sum(x) / len(x))
-        
-
+        logger.info("Saving checkpoint... wait all devices...")
+        xm.wait_device_ops()
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
             # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             # 에폭 종료 후 체크포인트 저장
-            xm.master_print("Saving checkpoint... wait all devices...")
-            xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
-            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
-            # 최고 성능 모델 저장
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_path = os.path.join(args.checkpoint, f"best_model")
-                os.makedirs(best_path, exist_ok=True)
-                model.module.save_pretrained(best_path)
-                tokenizer.save_pretrained(best_path)
-                logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
+            xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
+
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
         xm.rendezvous("checkpoint_sync")
-        xm.step()
+        xm.mark_step()
         dist.barrier(group=gloo_group)
+        logger.info(f"{rank}:im free~")
 
 
-    # 학습 완료 후 최종 모델 저장
     if is_local_master:
-        logger.info("Training completed, saving final model...")
-        final_path = os.path.join(args.checkpoint, "final_model")
-        os.makedirs(final_path, exist_ok=True)
-        model.module.save_pretrained(final_path)
-        tokenizer.save_pretrained(final_path)
-        logger.info(f"Final model saved to {final_path}")
+        logger.info("Training completed")
 
 
 def _mp_fn(index, args):
