@@ -408,7 +408,8 @@ def train_kobart(rank, args):
                 model.module.model.save_pretrained(best_path)
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
-    
+        xm.rendezvous("checkpoint_sync")
+        
     # 학습 완료 후 최종 모델 저장
     if is_local_master:
         logger.info("Training completed, saving final model...")
