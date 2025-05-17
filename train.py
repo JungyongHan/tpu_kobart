@@ -147,6 +147,8 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
+    if val_loss > 0.1:
+        return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
@@ -372,7 +374,7 @@ def train_kobart(rank, args):
                     )
 
         if is_local_master:
-            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args)
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
 
 
     if is_local_master:
