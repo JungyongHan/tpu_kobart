@@ -2,7 +2,7 @@
 git pull
 
 # 학습 실행
-~/venv/bin/python train.py \
+PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
     --test_file ./data/test.csv \
     --batch_size 8 \
