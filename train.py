@@ -338,8 +338,8 @@ def train_kobart(rank, args):
             if is_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
-    def _log_summary(epoch, step, avg_loss, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s", flush=True)
+    def _log_summary(epoch, step, total_steps, avg_loss, elapsed):
+        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
     # 학습 루프
     for epoch in range(start_epoch, args.max_epochs):
@@ -379,7 +379,7 @@ def train_kobart(rank, args):
                     # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
                     xm.add_step_closure(
                         _log_summary,
-                        args=(epoch, global_step, avg_loss, elapsed)
+                        args=(epoch, global_step, total_steps, avg_loss, elapsed)
                     )
                             
                 # # 정기적인 체크포인트 저장
