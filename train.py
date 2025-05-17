@@ -181,6 +181,7 @@ def train_kobart(rank, args):
     torch.manual_seed(42)
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
+    gloo_group = dist.new_group(backend='gloo', timeout=torch.timedelta(seconds=300))
     # 디바이스 설정
     device = xm.xla_device()
     
@@ -393,13 +394,13 @@ def train_kobart(rank, args):
         # 모든 프로세스에서 동기화
         val_loss = xm.mesh_reduce('val_loss', val_loss, lambda x: sum(x) / len(x))
         
+        # xm.wait_device_ops()
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
             # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             # 에폭 종료 후 체크포인트 저장
             xm.master_print("Saving checkpoint... wait all devices...")
-            xm.wait_device_ops()
             xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
@@ -411,7 +412,8 @@ def train_kobart(rank, args):
                 model.module.model.save_pretrained(best_path)
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
-        xm.rendezvous("checkpoint_sync")
+        # xm.rendezvous("checkpoint_sync")
+        dist.barrier(group=gloo_group)
 
     # 학습 완료 후 최종 모델 저장
     if is_local_master:
