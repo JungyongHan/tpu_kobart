@@ -1,14 +1,7 @@
-import argparse
-import os
 import re
-import glob
-import torch
-import ast
 import numpy as np
 import pandas as pd
-from tqdm import tqdm, trange
-from torch.utils.data import Dataset, DataLoader
-from functools import partial
+from torch.utils.data import Dataset
 import torch_xla.core.xla_model as xm
 pd.set_option('mode.chained_assignment', None)
 
@@ -19,7 +12,7 @@ class KoBARTSummaryDataset(Dataset):
         self.max_len = max_len
         self.docs = pd.read_csv(file)
         # 개행문자를 위한 특수 토큰 정의
-        self.newline_token = '<NL>'
+        self.newline_token = '<LF>'
         self.docs = self.preprocess_data(self.docs)
         self.len = self.docs.shape[0]
 

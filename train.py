@@ -1,10 +1,7 @@
 from torch_xla import runtime as xr
 import argparse
 import numpy as np
-import pandas as pd
 import os
-import datetime
-import shutil
 import time
 from loguru import logger
 
@@ -169,9 +166,6 @@ def train_kobart(rank, args):
     torch.manual_seed(42)
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
-    timeout = datetime.timedelta(seconds=600)
-    gloo_group = dist.new_group(backend='gloo', timeout=timeout)
-    # 디바이스 설정
     device = xm.xla_device()
     
     # 마스터 프로세스 확인
@@ -188,7 +182,7 @@ def train_kobart(rank, args):
     
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v2')
-    special_tokens_dict = {'additional_special_tokens': ['<NL>']}
+    special_tokens_dict = {'additional_special_tokens': ['<LF>']}
     tokenizer.add_special_tokens(special_tokens_dict)
     
     # 데이터셋 및 데이터로더 설정
@@ -265,7 +259,7 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr * xr.world_size())
 
 
 
@@ -283,7 +277,6 @@ def train_kobart(rank, args):
     # 체크포인트에서 이어서 학습
     start_epoch = 0
     global_step = 0
-    best_val_loss = float('inf')
     
     if args.resume_from_checkpoint:
         # 마지막 체크포인트 로드 checkpoint_{epoch}.pt
@@ -374,9 +367,6 @@ def train_kobart(rank, args):
 
         if is_local_master:
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args)
-        # logger.info(f"{rank} device wating...")
-        # dist.barrier(group=gloo_group)
-        # logger.info(f"{rank}:im free~")
 
 
     if is_local_master:
