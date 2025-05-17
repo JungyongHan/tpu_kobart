@@ -333,7 +333,7 @@ def train_kobart(rank, args):
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
-        epoch_loss_sum = torch.tensor(0.0, device=device)
+        epoch_loss = 0
         epoch_steps = 0
         start_time = time.time()
         
@@ -348,13 +348,13 @@ def train_kobart(rank, args):
             scheduler.step()
 
             # 손실 누적 (텐서 상태 유지)
-            epoch_loss_sum += loss.detach()
+            epoch_loss += loss.item()
             epoch_steps += 1
             global_step += 1
             
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
-                avg_loss = epoch_loss_sum.item() / epoch_steps
+                avg_loss = epoch_loss / epoch_steps
                 print(avg_loss)
                 xm.add_step_closure(
                     _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
@@ -362,7 +362,7 @@ def train_kobart(rank, args):
                 )
             xm.mark_step()
         if is_local_master:
-            avg_loss = epoch_loss_sum.item() / epoch_steps
+            avg_loss = epoch_loss / epoch_steps
             print(avg_loss)
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
     xm.rendezvous('init')
