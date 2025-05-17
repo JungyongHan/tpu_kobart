@@ -118,8 +118,8 @@ def train_step(model, batch, optimizer, device):
     # 순전파
     with torch_xla.amp.autocast(xm.xla_device()):
         outputs = model(input_ids, decoder_input_ids, labels)
-    loss = outputs.loss
-    
+        with torch_xla.amp.autocast(xm.xla_device(), enabled=False):
+            loss = outputs.loss
     # 역전파
     loss.backward()
     
@@ -332,49 +332,39 @@ def train_kobart(rank, args):
             if is_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
-    def _log_summary(epoch, step, total_steps, avg_loss, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s", flush=True)
+    def _log_summary(epoch, step, total_steps, elapsed):
+        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {elapsed:.2f}s", flush=True)
 
-    total_steps = len(train_loader) # 로깅을 위해 배치당 스텝 수 계산
-    # 학습 루프
+    total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
-        epoch_loss = 0
+        epoch_loss_sum = torch.tensor(0.0, device=device)
         epoch_steps = 0
-        # 에폭 시작 시간
         start_time = time.time()
         
         for step, batch in enumerate(train_loader):
             with torch_xla.step():
-                # 그래디언트 초기화
                 optimizer.zero_grad()
-                
-                # 학습 스텝
                 loss = train_step(model.module, batch, optimizer, device)
-
-                # 그래디언트 클리핑
+                
                 if args.gradient_clip_val > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
                 
                 optimizer.step()
                 scheduler.step()
 
-                # 손실 누적
-                epoch_loss += loss.item()
+                # 손실 누적 (텐서 상태 유지)
+                epoch_loss_sum += loss.detach()
                 epoch_steps += 1
                 global_step += 1
                 
-                # 로깅
+                # 로깅 (비동기적으로 처리)
                 if is_master and global_step % args.logging_steps == 0:
-                    avg_loss = epoch_loss / epoch_steps
-                    elapsed = time.time() - start_time
-                    # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
                     xm.add_step_closure(
-                        _log_summary,
-                        args=(epoch, step, total_steps, avg_loss, elapsed),
+                        _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
                         run_async=True
                     )
-
         if is_local_master:
+            avg_loss = loss_sum.item() / epoch_steps
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
 
 
