@@ -102,6 +102,10 @@ class KoBARTSummaryModel(nn.Module):
             labels=labels,
             return_dict=True
         )
+    
+    def save_pretrained(self, path):
+        """내부 모델을 저장하는 메서드"""
+        self.model.save_pretrained(path)
 
 
 def train_step(model, batch, optimizer, device):
@@ -182,7 +186,7 @@ def train_kobart(rank, args):
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
     timeout = datetime.timedelta(seconds=300)
-    gloo_group = dist.new_group(backend='gloo', timeout=timeout, ranks=[i for i in range(xr.world_size())] )
+    gloo_group = dist.new_group(backend='gloo', timeout=timeout)
     # 디바이스 설정
     device = xm.xla_device()
     
@@ -305,8 +309,8 @@ def train_kobart(rank, args):
                 logger.info(f"Loading model from {model_path}")
             
             # 모델 로드
-            # model.module.model = BartForConditionalGeneration.from_pretrained(model_path)
-            # model.module.model.to(device)
+            # model.module = BartForConditionalGeneration.from_pretrained(model_path)
+            # model.module.to(device)
             if hasattr(model, "module"):
                 state_dict = model.module.state_dict()
             else:
@@ -389,13 +393,14 @@ def train_kobart(rank, args):
                 # if is_local_master and global_step % args.save_steps == 0:
                 #     save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
         
+        # xm.wait_device_ops()
         # 에폭 종료 후 평가
         val_loss = validate(model.module, val_loader, device)
         
         # 모든 프로세스에서 동기화
         val_loss = xm.mesh_reduce('val_loss', val_loss, lambda x: sum(x) / len(x))
         
-        # xm.wait_device_ops()
+
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
@@ -415,6 +420,7 @@ def train_kobart(rank, args):
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
         # xm.rendezvous("checkpoint_sync")
         dist.barrier(group=gloo_group)
+
 
     # 학습 완료 후 최종 모델 저장
     if is_local_master:
