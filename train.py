@@ -2,6 +2,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import os
+os.environ["PJRT_DEVICE"] = "TPU"
+
 import time
 from loguru import logger
 
@@ -417,7 +419,7 @@ def _mp_fn(index, args):
 if __name__ == '__main__':
     parser = ArgsBase.add_model_specific_args(parser)
     args = parser.parse_args()
-    os.environ["PJRT_DEVICE"] = "TPU"
+    
     # 학습 시작
     logger.info("Starting TPU distributed training with pure PyTorch")
     logger.info(args)
