@@ -1,3 +1,4 @@
+from torch_xla import runtime as xr
 import argparse
 import numpy as np
 import pandas as pd
