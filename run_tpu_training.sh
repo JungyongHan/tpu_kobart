@@ -17,8 +17,7 @@ python train.py \
     --gradient_clip_val 1.0 \
     --checkpoint ../checkpoint/ \
     --num_workers 4 \
-    --save_steps 100 \
-    --eval_steps 100 \
+    --save_steps 1000 \
     --logging_steps 10
 
 echo "TPU 학습이 완료되었습니다."

@@ -78,10 +78,6 @@ class ArgsBase():
                             type=int,
                             default=100,
                             help='steps interval for saving model')
-        parser.add_argument('--eval_steps',
-                            type=int,
-                            default=100,
-                            help='steps interval for evaluation')
         parser.add_argument('--logging_steps',
                             type=int,
                             default=10,
@@ -93,7 +89,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v1')
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
