@@ -354,13 +354,14 @@ def train_kobart(rank, args):
                 global_step += 1
                 
                 # 로깅 (비동기적으로 처리)
-                if is_local_master and (global_step + 1) % args.logging_steps == 0:
+                if is_local_master and (global_step - 1) % args.logging_steps == 0:
                     xm.add_step_closure(
                         _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
                         run_async=True
                     )
         if is_local_master:
             avg_loss = epoch_loss_sum.item() / epoch_steps
+            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {time.time()-start_time:.2f}s, Loss: {avg_loss:.4f}", flush=True)
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
     xm.rendezvous('init')
 
