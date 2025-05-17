@@ -149,7 +149,7 @@ def validate(model, val_loader, device):
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
     if val_loss > 0.1:
-        xm.master_print(f"Skipping checkpoint for val_loss: {val_loss}")
+        logger.info(f"Skipping checkpoint for val_loss: {val_loss}")
         return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
@@ -179,11 +179,6 @@ def train_kobart(rank, args):
         logger.info(f"Starting training on TPU core {rank}")
         os.makedirs(args.checkpoint, exist_ok=True)
         
-    
-    if is_master := xm.is_master_ordinal(False):
-        logger.info("Starting training on TPU core 0")
-        # os.environ["PT_XLA_DEBUG_LEVEL"] = 2
-        is_local_master = True
     
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v2')
@@ -298,7 +293,7 @@ def train_kobart(rank, args):
         if os.path.exists(model_path):
             checkpoint = torch.load(model_path, map_location='cpu')
             
-            if is_master:
+            if is_local_master:
                 logger.info(f"Loading model from {model_path}")
             
             if hasattr(model, "module"):
@@ -330,7 +325,7 @@ def train_kobart(rank, args):
             start_epoch = checkpoint['epoch']
             global_step = checkpoint['step']
             
-            if is_master:
+            if is_local_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
     def _log_summary(epoch, step, total_steps, elapsed):
@@ -359,7 +354,7 @@ def train_kobart(rank, args):
                 global_step += 1
                 
                 # 로깅 (비동기적으로 처리)
-                if is_master and global_step % args.logging_steps == 0:
+                if is_local_master and (global_step + 1) % args.logging_steps == 0:
                     xm.add_step_closure(
                         _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
                         run_async=True
@@ -367,7 +362,7 @@ def train_kobart(rank, args):
         if is_local_master:
             avg_loss = loss_sum.item() / epoch_steps
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
-
+    xm.rendezvous('init')
 
     if is_local_master:
         logger.info("Training completed")
