@@ -116,10 +116,8 @@ def train_step(model, batch, optimizer, device):
     labels = batch['labels'].to(device)
     
     # 순전파
-    with autocast(xm.xla_device()):
-        outputs = model(input_ids, decoder_input_ids, labels)
-        with autocast(xm.xla_device(), enabled=False):
-            loss = outputs.loss
+    outputs = model(input_ids, decoder_input_ids, labels)
+    loss = outputs.loss
     # 역전파
     loss.backward()
     
