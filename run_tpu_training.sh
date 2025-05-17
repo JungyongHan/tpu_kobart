@@ -5,7 +5,7 @@ git pull
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
     --test_file ./data/test.csv \
-    --batch_size 8 \
+    --batch_size 12 \
     --max_len 1024 \
     --max_epochs 1000 \
     --lr 3e-5 \
