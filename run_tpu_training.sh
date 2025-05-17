@@ -1,6 +1,7 @@
 #!/bin/bash
+git stash
 git pull
-
+git stash pop
 # 학습 실행
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
