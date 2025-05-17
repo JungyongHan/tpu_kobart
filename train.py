@@ -203,15 +203,15 @@ def train_kobart(rank, args):
     
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
-        num_replicas=args.num_tpu_cores,
-        rank=rank,
-        shuffle=True
+        num_replicas=xr.world_size(),
+        rank=xr.global_ordinal(),
+        shuffle=False
     )
     
     val_sampler = torch.utils.data.distributed.DistributedSampler(
         val_dataset,
-        num_replicas=args.num_tpu_cores,
-        rank=rank,
+        num_replicas=xr.world_size(),
+        rank=xr.global_ordinal(),
         shuffle=False
     )
     
