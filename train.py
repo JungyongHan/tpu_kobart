@@ -393,15 +393,12 @@ def train_kobart(rank, args):
         # 모든 프로세스에서 동기화
         val_loss = xm.mesh_reduce('val_loss', val_loss, lambda x: sum(x) / len(x))
         logger.info("Saving checkpoint... wait all devices...")
-        xm.wait_device_ops()
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
             xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
-        xm.rendezvous("checkpoint_sync")
-        xm.mark_step()
         dist.barrier(group=gloo_group)
         logger.info(f"{rank}:im free~")
 

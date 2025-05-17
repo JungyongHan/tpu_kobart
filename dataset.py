@@ -10,7 +10,7 @@ from tqdm import tqdm, trange
 from torch.utils.data import Dataset, DataLoader
 from functools import partial
 import torch_xla.core.xla_model as xm
-# pd.set_option('mode.chained_assignment', None)
+pd.set_option('mode.chained_assignment', None)
 
 class KoBARTSummaryDataset(Dataset):
     def __init__(self, file, tokenizer, max_len, ignore_index=-100):
