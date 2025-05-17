@@ -83,14 +83,14 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
     def forward(self, input_ids, decoder_input_ids, labels):
         attention_mask = input_ids.ne(self.pad_token_id).float()
         decoder_attention_mask = decoder_input_ids.ne(self.pad_token_id).float()
-        
+            
         return self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -115,7 +115,8 @@ def train_step(model, batch, optimizer, device):
     labels = batch['labels'].to(device)
     
     # 순전파
-    outputs = model(input_ids, decoder_input_ids, labels)
+    with torch_xla.amp.autocast(xm.xla_device()):
+        outputs = model(input_ids, decoder_input_ids, labels)
     loss = outputs.loss
     
     # 역전파
