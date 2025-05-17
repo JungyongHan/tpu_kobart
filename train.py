@@ -381,7 +381,8 @@ def train_kobart(rank, args):
                     # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
                     xm.add_step_closure(
                         _log_summary,
-                        args=(epoch, global_step, total_steps, avg_loss, elapsed)
+                        args=(epoch, global_step, total_steps, avg_loss, elapsed),
+                        run_async=True
                     )
                             
                 # # 정기적인 체크포인트 저장
