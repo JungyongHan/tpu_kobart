@@ -187,17 +187,39 @@ def train_kobart(rank, args):
     
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
-    val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
+    if os.path.exists(args.train_file):
+        val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
+
+        val_sampler = torch.utils.data.distributed.DistributedSampler(
+            val_dataset,
+            num_replicas=xr.world_size(),
+            rank=xr.global_ordinal(),
+            shuffle=False
+        )
+
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            sampler=val_sampler,
+            num_workers=args.num_workers,
+            drop_last=True,
+            persistent_workers=True,
+            prefetch_factor=16
+        )
+
+        val_loader = pl.MpDeviceLoader(
+            val_loader, 
+            device,
+            loader_prefetch_size=128,
+            device_prefetch_size=1,
+            host_to_device_transfer_threads=4
+        )
+    else:
+        val_loader = None
+
     
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
-        num_replicas=xr.world_size(),
-        rank=xr.global_ordinal(),
-        shuffle=False
-    )
-    
-    val_sampler = torch.utils.data.distributed.DistributedSampler(
-        val_dataset,
         num_replicas=xr.world_size(),
         rank=xr.global_ordinal(),
         shuffle=False
@@ -213,26 +235,9 @@ def train_kobart(rank, args):
         prefetch_factor=16
     )
     
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        sampler=val_sampler,
-        num_workers=args.num_workers,
-        drop_last=True,
-        persistent_workers=True,
-        prefetch_factor=16
-    )
-
     # TPU에 최적화된 데이터로더
     train_loader = pl.MpDeviceLoader(
         train_loader, 
-        device,
-        loader_prefetch_size=128,
-        device_prefetch_size=1,
-        host_to_device_transfer_threads=4
-    )
-    val_loader = pl.MpDeviceLoader(
-        val_loader, 
         device,
         loader_prefetch_size=128,
         device_prefetch_size=1,
