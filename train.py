@@ -337,7 +337,7 @@ def train_kobart(rank, args):
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
     def _log_summary(epoch, step, avg_loss, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s")
+        print(f"Epoch: {epoch}, Step: {step}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
     # 학습 루프
     for epoch in range(start_epoch, args.max_epochs):
@@ -393,7 +393,8 @@ def train_kobart(rank, args):
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
-            logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
+            # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
+            xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             # 에폭 종료 후 체크포인트 저장
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
             
