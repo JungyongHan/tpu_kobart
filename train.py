@@ -182,7 +182,7 @@ def train_kobart(rank, args):
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
     timeout = datetime.timedelta(seconds=300)
-    gloo_group = dist.new_group(backend='gloo', timeout=timeout)
+    gloo_group = dist.new_group(backend='gloo', timeout=timeout, ranks=[i for i in range(xr.world_size())] )
     # 디바이스 설정
     device = xm.xla_device()
     
@@ -410,7 +410,7 @@ def train_kobart(rank, args):
                 best_val_loss = val_loss
                 best_path = os.path.join(args.checkpoint, f"best_model")
                 os.makedirs(best_path, exist_ok=True)
-                model.module.model.save_pretrained(best_path)
+                model.module.save_pretrained(best_path)
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
         # xm.rendezvous("checkpoint_sync")
@@ -421,7 +421,7 @@ def train_kobart(rank, args):
         logger.info("Training completed, saving final model...")
         final_path = os.path.join(args.checkpoint, "final_model")
         os.makedirs(final_path, exist_ok=True)
-        model.module.model.save_pretrained(final_path)
+        model.module.save_pretrained(final_path)
         tokenizer.save_pretrained(final_path)
         logger.info(f"Final model saved to {final_path}")
 
