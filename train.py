@@ -182,6 +182,7 @@ def train_kobart(rank, args):
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
     timeout = datetime.timedelta(seconds=600)
+    gloo_group = dist.new_group(backend='gloo', timeout=timeout)
     # 디바이스 설정
     device = xm.xla_device()
     
@@ -396,9 +397,10 @@ def train_kobart(rank, args):
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
-            logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
+            logging.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
-            
+            logging.info(f'{rank}:saved DONE')
+        dist.barrier(group=gloo_group)
         logger.info(f"{rank}:im free~")
 
 
