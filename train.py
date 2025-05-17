@@ -149,6 +149,7 @@ def validate(model, val_loader, device):
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
     if val_loss > 0.1:
+        xm.master_print(f"Skipping checkpoint for val_loss: {val_loss}")
         return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
