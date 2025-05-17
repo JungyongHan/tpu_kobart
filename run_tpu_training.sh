@@ -4,7 +4,7 @@ git pull
 # 학습 실행
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
-    --batch_size 16 \
+    --batch_size 24 \
     --max_len 1024 \
     --max_epochs 1000 \
     --lr 4e-5 \
