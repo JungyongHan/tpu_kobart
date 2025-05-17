@@ -397,12 +397,9 @@ def train_kobart(rank, args):
         if is_local_master:
             epoch_avg_loss = epoch_loss / epoch_steps
             epoch_time = time.time() - start_time
-            # logger.info(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
-            # 에폭 종료 후 체크포인트 저장
-            
             xm.master_print(f"Epoch: {epoch}, Step: {global_step}, Loss: {epoch_avg_loss:.4f}, Val Loss: {val_loss:.4f}, Time: {epoch_time:.2f}s")
-
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, val_loss)
+            
         xm.rendezvous("checkpoint_sync")
         xm.mark_step()
         dist.barrier(group=gloo_group)
