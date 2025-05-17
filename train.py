@@ -186,7 +186,7 @@ def train_kobart(rank, args):
     
     # 마스터 프로세스 확인
     
-    if is_master := xm.is_master_ordinal(local=False):
+    if is_master := rank == 0:
         print("Starting training on TPU core 0")
         os.environ["PT_XLA_DEBUG_LEVEL"] = 2
 
@@ -361,6 +361,10 @@ def train_kobart(rank, args):
             # 옵티마이저 스텝
             # xm.optimizer_step(optimizer)
             optimizer.step()
+            # 스케줄러 업데이트
+            scheduler.step()
+            xm.mark_step()
+
             # 손실 누적
             epoch_loss += loss.item()
             epoch_steps += 1
@@ -401,10 +405,6 @@ def train_kobart(rank, args):
                 model.module.model.save_pretrained(best_path)
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
-
-        # 스케줄러 업데이트
-        scheduler.step()
-        xm.mark_step()
     
     # 학습 완료 후 최종 모델 저장
     if is_local_master:
