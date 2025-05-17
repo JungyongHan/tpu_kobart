@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import os
-
+import datetime
 
 import time
 from loguru import logger
@@ -181,7 +181,8 @@ def train_kobart(rank, args):
     torch.manual_seed(42)
     np.random.seed(42)
     dist.init_process_group("xla", init_method='xla://')
-    gloo_group = dist.new_group(backend='gloo', timeout=torch.timedelta(seconds=300))
+    timeout = datetime.timedelta(seconds=300)
+    gloo_group = dist.new_group(backend='gloo', timeout=timeout)
     # 디바이스 설정
     device = xm.xla_device()
     
