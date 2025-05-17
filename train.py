@@ -393,7 +393,7 @@ def train_kobart(rank, args):
                 # if is_local_master and global_step % args.save_steps == 0:
                 #     save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, global_step, args)
         
-        # xm.wait_device_ops()
+        xm.wait_device_ops()
         # 에폭 종료 후 평가
         val_loss = validate(model.module, val_loader, device)
         
@@ -418,7 +418,8 @@ def train_kobart(rank, args):
                 model.module.save_pretrained(best_path)
                 tokenizer.save_pretrained(best_path)
                 logger.info(f"New best model saved with val_loss: {val_loss:.4f}")
-        # xm.rendezvous("checkpoint_sync")
+        xm.rendezvous("checkpoint_sync")
+        xm.step()
         dist.barrier(group=gloo_group)
 
 
