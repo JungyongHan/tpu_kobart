@@ -13,6 +13,6 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --checkpoint ./checkpoint/ \
     --num_workers 16 \
     --save_steps 1000 \
-    --logging_steps 200
+    --logging_steps 10
 
 echo "TPU 학습이 완료되었습니다."
