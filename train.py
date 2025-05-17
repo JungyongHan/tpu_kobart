@@ -84,7 +84,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
