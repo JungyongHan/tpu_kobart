@@ -341,6 +341,7 @@ def train_kobart(rank, args):
     def _log_summary(epoch, step, total_steps, avg_loss, elapsed):
         print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
+    total_steps = len(train_loader) # 로깅을 위해 배치당 스텝 수 계산
     # 학습 루프
     for epoch in range(start_epoch, args.max_epochs):
         epoch_loss = 0
