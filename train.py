@@ -192,7 +192,7 @@ def train_kobart(rank, args):
     
     if is_master := xm.is_master_ordinal(False):
         logger.info("Starting training on TPU core 0")
-        os.environ["PT_XLA_DEBUG_LEVEL"] = 2
+        # os.environ["PT_XLA_DEBUG_LEVEL"] = 2
         is_local_master = True
     
     # 토크나이저 설정
