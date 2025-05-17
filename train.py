@@ -149,7 +149,6 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
-    os.makedirs(args.checkpoint, exist_ok=True)
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
@@ -180,6 +179,7 @@ def train_kobart(rank, args):
     if is_local_master := xm.is_master_ordinal():
         logger.info(f"Starting training on TPU core {rank}")
         os.makedirs(args.checkpoint, exist_ok=True)
+        
     
     if is_master := xm.is_master_ordinal(False):
         logger.info("Starting training on TPU core 0")
