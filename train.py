@@ -320,8 +320,8 @@ def train_kobart(rank, args):
             if is_local_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
-    def _log_summary(epoch, step, total_steps, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {elapsed:.2f}s", flush=True)
+    def _log_summary(epoch, step, total_steps, loss, elapsed):
+        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f} , Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
@@ -345,12 +345,10 @@ def train_kobart(rank, args):
             
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
-                print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss.item():.4f}")
                 xm.add_step_closure(
-                    _log_summary, args=(epoch, step, total_steps, time.time()-start_time),
+                    _log_summary, args=(epoch, step, total_steps, epoch_loss/epoch_steps, time.time()-start_time),
                     run_async=True
                 )
-            xm.mark_step()
         if is_local_master:
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
         scheduler.step()
