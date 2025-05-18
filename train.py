@@ -344,7 +344,7 @@ def train_kobart(rank, args):
             epoch_steps += 1
             global_step += 1
 
-            if xr.is_master_ordinal(False):
+            if xm.is_master_ordinal(False):
                 logger.info(epoch_loss.item() / epoch_steps)
 
             # 로깅 (비동기적으로 처리)
