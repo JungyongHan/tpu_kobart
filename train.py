@@ -157,9 +157,7 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, v
     xm.save({
         'model':state_dict,
         'optimizer': optimizer.state_dict(),
-        'scheduler': scheduler.state_dict(),
-        'epoch': epoch,
-        'step': step,
+        'epoch': epoch
     }, os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt'))
     
 
@@ -264,10 +262,9 @@ def train_kobart(rank, args):
     warmup_steps = int(total_steps * args.warmup_ratio)
     
     # 스케줄러 설정
-    scheduler = get_linear_schedule_with_warmup(
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(
         optimizer,
-        num_warmup_steps=warmup_steps,
-        num_training_steps=total_steps
+        gamma=0.999875
     )
     
     # 체크포인트에서 이어서 학습
@@ -314,7 +311,10 @@ def train_kobart(rank, args):
             scheduler.load_state_dict(checkpoint['scheduler'])
             
             start_epoch = checkpoint['epoch']
-            global_step = checkpoint['step']
+            global_step = start_epoch * len(train_loader)
+
+            for _ in range(start_epoch):
+                scheduler.step()
             
             if is_local_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
