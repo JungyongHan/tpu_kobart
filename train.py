@@ -149,13 +149,13 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
     checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
     if epoch % args.save_epoch == 0:
         checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
-    if math.isnan(epoch_loss) or epoch_loss > 0.1:
-        if xm.is_master_ordinal(False):
-            wandb.log({
-                "val/loss": val_loss,
-                "train/epoch_loss": epoch_loss,
-                "train/epoch": epoch
-            })
+    if xm.is_master_ordinal(False):
+        wandb.log({
+            "val/loss": val_loss,
+            "train/epoch_loss": epoch_loss,
+            "train/epoch": epoch
+        })
+        
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
