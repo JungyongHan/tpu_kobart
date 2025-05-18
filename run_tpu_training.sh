@@ -12,7 +12,7 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --gradient_clip_val 1.0 \
     --checkpoint ./checkpoint/ \
     --num_workers 16 \
-    --logging_steps 100 \
+    --logging_steps 10 \
     --save_epoch 10 \
     --use_wandb # if you want to use wandb, add this argument. Needed  ~/venv/bin/python -m wandb login <API_KEY> .
 
