@@ -71,6 +71,10 @@ class ArgsBase():
                             type=int,
                             default=10,
                             help='steps interval for logging')
+        parser.add_argument('--save_epoch',
+                            type=int,
+                            default=10,
+                            help='save per epoch')
         parser.add_argument('--use_wandb',
                             action='store_true',
                             help='use wandb for logging')
@@ -142,6 +146,9 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, epoch_loss=None, val_loss=None):
+    checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
+    if epoch % args.save_epoch == 0:
+        checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
     if math.isnan(epoch_loss) or epoch_loss > 0.1:
         if xm.is_master_ordinal(False):
             wandb.log({
@@ -149,15 +156,13 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
                 "train/epoch_loss": epoch_loss,
                 "train/epoch": epoch
             })
-            logger.info(f"Skipping checkpoint for epoch_loss: {epoch_loss}")
-        return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
         state_dict = model.state_dict()
     
     # 옵티마이저, 스케줄러 상태 저장
-    checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
+    
     xm.save({
         'model':state_dict,
         'optimizer': optimizer.state_dict(),
@@ -334,7 +339,8 @@ def train_kobart(rank, args):
                 "train/step": global_step,
                 "train/epoch": epoch
             })
-        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f}, Time: {elapsed:.2f}s", flush=True)
+        else:
+            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
