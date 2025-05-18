@@ -343,10 +343,12 @@ def train_kobart(rank, args):
             epoch_loss += loss.detach()
             epoch_steps += 1
             global_step += 1
-            
+
+            if xr.is_master_ordinal(False):
+                logger.info(epoch_loss.item() / epoch_steps)
+
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
-                print(epoch_loss.item() / epoch_steps)
                 xm.add_step_closure(
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
