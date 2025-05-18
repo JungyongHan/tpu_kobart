@@ -65,14 +65,6 @@ class ArgsBase():
                             type=int,
                             default=4,
                             help='num of worker for dataloader')
-        parser.add_argument('--warmup_ratio',
-                            type=float,
-                            default=0.1,
-                            help='warmup ratio for scheduler')
-        parser.add_argument('--save_steps',
-                            type=int,
-                            default=100,
-                            help='steps interval for saving model')
         parser.add_argument('--logging_steps',
                             type=int,
                             default=10,
@@ -256,12 +248,6 @@ def train_kobart(rank, args):
     ]
     optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr * xr.world_size())
 
-
-
-    # 총 학습 스텝 계산
-    total_steps = len(train_loader) * args.max_epochs
-    warmup_steps = int(total_steps * args.warmup_ratio)
-    
     # 스케줄러 설정
     scheduler = torch.optim.lr_scheduler.ExponentialLR(
         optimizer,
