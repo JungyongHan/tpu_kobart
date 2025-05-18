@@ -1,4 +1,7 @@
 #!/bin/bash
+
+rm ./nohup.out
+
 git stash
 git pull
 git stash pop
