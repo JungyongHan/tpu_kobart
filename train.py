@@ -162,6 +162,7 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
     checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
     xm.save({
         'model':state_dict,
+        'optimizer': optimizer.state_dict(),
         'epoch': epoch
     }, checkpoint_path)
 
@@ -275,10 +276,16 @@ def train_kobart(rank, args):
     ]
     optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr * xr.world_size())
 
-    # 스케줄러 설정
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(
+    # 스케줄러 설정 - Linear Warmup 사용
+    # 총 학습 스텝 계산
+    total_steps = len(train_loader) * args.max_epochs
+    # 웜업 스텝 계산 (전체 스텝의 10%)
+    warmup_steps = int(total_steps * 0.1)
+    
+    scheduler = get_linear_schedule_with_warmup(
         optimizer,
-        gamma=0.999875
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
     )
     
     # 체크포인트에서 이어서 학습
@@ -320,10 +327,15 @@ def train_kobart(rank, args):
             else:
                 model.load_state_dict(new_state_dict)
             
+            optimizer.load_state_dict(checkpoint['optimizer'])
             start_epoch = checkpoint['epoch']
             global_step = start_epoch * len(train_loader)
             start_epoch = start_epoch + 1
-            for _ in range(start_epoch):
+            
+            # Linear Warmup 스케줄러는 step 기반이므로 epoch이 아닌 global_step으로 조정
+            # 스케줄러 상태 복원 (global_step만큼 스케줄러 스텝 진행)
+            scheduler.base_lrs = [args.lr * xr.world_size() for _ in optimizer.param_groups]
+            for _ in range(global_step):
                 scheduler.step()
             
             if is_local_master:
