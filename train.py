@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch_xla
-from torch_xla.amp import syncfree, autocast
+from torch_xla.amp import syncfree
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
@@ -84,7 +84,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
@@ -321,11 +321,11 @@ def train_kobart(rank, args):
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
     def _log_summary(epoch, step, total_steps, loss, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f} , Time: {elapsed:.2f}s", flush=True)
+        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
-        epoch_loss = 0
+        epoch_loss = torch.tensor(0.0, device=device).detach()
         epoch_steps = 0
         start_time = time.time()
         
@@ -339,18 +339,19 @@ def train_kobart(rank, args):
             xm.optimizer_step(optimizer)
             
             # 손실 누적 (텐서 상태 유지)
-            epoch_loss += loss.item()
+            epoch_loss += loss.detach()
             epoch_steps += 1
             global_step += 1
             
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
                 xm.add_step_closure(
-                    _log_summary, args=(epoch, step, total_steps, epoch_loss/epoch_steps, time.time()-start_time),
+                    _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
                 )
         if is_local_master:
-            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, avg_loss)
+            total_loss = epoch_loss.item() / epoch_steps
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss)
         scheduler.step()
     xm.rendezvous('init')
 
