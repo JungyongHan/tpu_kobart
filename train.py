@@ -91,15 +91,15 @@ class KoBARTSummaryModel(nn.Module):
     def forward(self, input_ids, decoder_input_ids, labels):
         attention_mask = input_ids.ne(self.pad_token_id).float()
         decoder_attention_mask = decoder_input_ids.ne(self.pad_token_id).float()
-            
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            labels=labels,
-            return_dict=True
-        )
+        with autocast(xm.xla_device()):
+            return self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                decoder_input_ids=decoder_input_ids,
+                decoder_attention_mask=decoder_attention_mask,
+                labels=labels,
+                return_dict=True
+            )
     
     def save_pretrained(self, path):
         """내부 모델을 저장하는 메서드"""
@@ -116,9 +116,8 @@ def train_step(model, batch, optimizer, device):
     labels = batch['labels'].to(device)
     
     # 순전파
-    with autocast(xm.xla_device()):
-        outputs = model(input_ids, decoder_input_ids, labels)
-        loss = outputs.loss
+    outputs = model(input_ids, decoder_input_ids, labels)
+    loss = outputs.loss
     # 역전파
     loss.backward()
     
