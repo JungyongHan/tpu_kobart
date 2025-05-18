@@ -348,7 +348,7 @@ def train_kobart(rank, args):
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
                 )
-        total_loss = xm.all_reduce(xm.REDUCE_SUM, [epoch_loss], scale=1.0 / xr.world_size())
+        total_loss = xm.all_reduce(xm.REDUCE_SUM, epoch_loss, scale=1.0 / xr.world_size())
         torch_xla.sync()
         if is_local_master:
             total_loss = total_loss.item() / epoch_steps
