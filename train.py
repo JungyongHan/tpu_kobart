@@ -179,10 +179,7 @@ def train_kobart(rank, args):
         
         # wandb 초기화 (마스터 프로세스에서만)
         if args.use_wandb and xm.is_local_master(False):
-            wandb.init(
-                project="MY TPU Training",
-                config=vars(args)
-            )
+            wandb.init(project="MY TPU Training")
             logger.info("Weights & Biases initialized")
         
     
@@ -379,7 +376,7 @@ def train_kobart(rank, args):
 
     if is_local_master:
         logger.info("Training completed")
-        if args.use_wandb:
+        if args.use_wandb and xm.is_local_master(False):
             wandb.finish()
 
 
