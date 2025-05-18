@@ -146,9 +146,6 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, epoch_loss=None, val_loss=None):
-    checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
-    if epoch % args.save_epoch == 0:
-        checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
     if xm.is_master_ordinal(False):
         wandb.log({
             "val/loss": val_loss,
@@ -162,12 +159,18 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
         state_dict = model.state_dict()
     
     # 옵티마이저, 스케줄러 상태 저장
-    
+    checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
     xm.save({
         'model':state_dict,
-        'optimizer': optimizer.state_dict(),
         'epoch': epoch
     }, checkpoint_path)
+
+    if epoch % args.save_epoch == 0:
+        checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
+        xm.save({
+            'model':state_dict,
+            'epoch': epoch
+        }, checkpoint_path)
 
 def train_kobart(rank, args):
     # 시드 설정
@@ -316,10 +319,6 @@ def train_kobart(rank, args):
                 model.module.load_state_dict(new_state_dict)
             else:
                 model.load_state_dict(new_state_dict)
-            
-            # 옵티마이저, 스케줄러 상태 로드
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            scheduler.load_state_dict(checkpoint['scheduler'])
             
             start_epoch = checkpoint['epoch']
             global_step = start_epoch * len(train_loader)

@@ -13,6 +13,7 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --checkpoint ./checkpoint/ \
     --num_workers 16 \
     --logging_steps 100 \
+    --save_epoch 10 \
     --use_wandb # if you want to use wandb, add this argument. Needed  ~/venv/bin/python -m wandb login <API_KEY> .
 
 echo "TPU 학습이 완료되었습니다."
