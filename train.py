@@ -4,7 +4,7 @@ import numpy as np
 import os
 import time
 from loguru import logger
-
+import math
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -142,7 +142,7 @@ def validate(model, val_loader, device):
 
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, epoch_loss=None, val_loss=None):
-    if torch.isnan(epoch_loss) or epoch_loss > 0.1:
+    if math.isnan(epoch_loss) or epoch_loss > 0.1:
         if xm.is_master_ordinal(False):
             wandb.log({
                 "val/loss": val_loss,
@@ -194,6 +194,7 @@ def train_kobart(rank, args):
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
     if os.path.exists(args.test_file):
+        logger.info("Loading validation dataset")
         val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
 
         val_sampler = torch.utils.data.distributed.DistributedSampler(
