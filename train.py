@@ -146,7 +146,8 @@ def validate(model, val_loader, device):
 
 def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
     if val_loss > 0.1:
-        logger.info(f"Skipping checkpoint for val_loss: {val_loss}")
+        if xm.is_master_ordinal(False):
+            logger.info(f"Skipping checkpoint for val_loss: {val_loss}")
         return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
@@ -343,7 +344,7 @@ def train_kobart(rank, args):
             global_step += 1
 
             # 로깅 (비동기적으로 처리)
-            if is_local_master and (global_step - 1) % args.logging_steps == 0:
+            if xm.is_master_ordinal(False) and (global_step - 1) % args.logging_steps == 0:
                 xm.add_step_closure(
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
