@@ -348,7 +348,7 @@ def train_kobart(rank, args):
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
                 )
-        per_loss = loss.item() / epoch_steps
+        per_loss = epoch_loss.item() / epoch_steps
         total_loss = xm.mesh_reduce('get_loss', per_loss, np.mean)
         if is_local_master:
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss)
