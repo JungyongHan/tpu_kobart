@@ -17,6 +17,8 @@ import torch_xla.distributed.xla_backend
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup
 
+import wandb
+
 from dataset import KoBARTSummaryDataset
 
 parser = argparse.ArgumentParser(description='KoBART Summarization for TPU with Pure PyTorch')
@@ -69,6 +71,9 @@ class ArgsBase():
                             type=int,
                             default=10,
                             help='steps interval for logging')
+        parser.add_argument('--use_wandb',
+                            action='store_true',
+                            help='use wandb for logging')
 
         return parser
 
@@ -136,10 +141,15 @@ def validate(model, val_loader, device):
     return total_loss / total_samples
 
 
-def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, val_loss=None):
-    if val_loss > 0.1:
+def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, epoch_loss=None, val_loss=None):
+    if torch.isnan(epoch_loss) or epoch_loss > 0.1:
         if xm.is_master_ordinal(False):
-            logger.info(f"Skipping checkpoint for val_loss: {val_loss}")
+            wandb.log({
+                "val/loss": val_loss,
+                "train/epoch_loss": epoch_loss,
+                "train/epoch": epoch
+            })
+            logger.info(f"Skipping checkpoint for epoch_loss: {epoch_loss}")
         return
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
@@ -147,12 +157,12 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, v
         state_dict = model.state_dict()
     
     # 옵티마이저, 스케줄러 상태 저장
+    checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
     xm.save({
         'model':state_dict,
         'optimizer': optimizer.state_dict(),
         'epoch': epoch
-    }, os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt'))
-    
+    }, checkpoint_path)
 
 def train_kobart(rank, args):
     # 시드 설정
@@ -166,6 +176,14 @@ def train_kobart(rank, args):
     if is_local_master := xm.is_master_ordinal():
         logger.info(f"Starting training on TPU core {rank}")
         os.makedirs(args.checkpoint, exist_ok=True)
+        
+        # wandb 초기화 (마스터 프로세스에서만)
+        if args.use_wandb and xm.is_local_master(False):
+            wandb.init(
+                project="MY TPU Training",
+                config=vars(args)
+            )
+            logger.info("Weights & Biases initialized")
         
     
     # 토크나이저 설정
@@ -299,15 +317,23 @@ def train_kobart(rank, args):
             
             start_epoch = checkpoint['epoch']
             global_step = start_epoch * len(train_loader)
-
+            start_epoch = start_epoch + 1
             for _ in range(start_epoch):
                 scheduler.step()
             
             if is_local_master:
                 logger.info(f"Resuming from epoch {start_epoch}, step {global_step}")
     
-    def _log_summary(epoch, step, total_steps, loss, elapsed):
-        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Time: {elapsed:.2f}s", flush=True)
+    def _log_summary(epoch, step, total_steps, global_step, optimizer, loss, elapsed):
+        # wandb 로깅
+        if args.use_wandb:
+            wandb.log({
+                "train/loss": loss,
+                "train/lr": optimizer.param_groups[0]['lr'],
+                "train/step": global_step,
+                "train/epoch": epoch
+            })
+        print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
@@ -331,19 +357,30 @@ def train_kobart(rank, args):
 
             # 로깅 (비동기적으로 처리)
             if xm.is_master_ordinal(False) and (global_step - 1) % args.logging_steps == 0:
+                # 콘솔 로깅
                 xm.add_step_closure(
-                    _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
+                    _log_summary, args=(epoch, step, total_steps, global_step, optimizer, loss.item(), time.time()-start_time),
                     run_async=True
                 )
+                
         per_loss = epoch_loss.item() / epoch_steps
         total_loss = xm.mesh_reduce('get_loss', per_loss, np.mean)
+        
+        # 검증 데이터셋이 있으면 검증 수행
+        val_loss = None
+        if val_loader is not None:
+            val_loss = validate(model, val_loader, device)
+            val_loss = xm.mesh_reduce('get_val_loss', val_loss, np.mean)
+
         if is_local_master:
-            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss)
+            save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss, val_loss)
         scheduler.step()
     xm.rendezvous('init')
 
     if is_local_master:
         logger.info("Training completed")
+        if args.use_wandb:
+            wandb.finish()
 
 
 def _mp_fn(index, args):
