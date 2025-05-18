@@ -293,12 +293,12 @@ def train_kobart(rank, args):
     global_step = 0
     
     if args.resume_from_checkpoint:
-        # 마지막 체크포인트 로드 checkpoint_{epoch}.pt
-        files = os.listdir(args.checkpoint)
-        checkpoint_files = [f for f in files if f.startswith('checkpoint_') and f.endswith('.pt')]
-        checkpoint_files.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
-        model_path = checkpoint_files[-1] if checkpoint_files else None
-
+        # # 마지막 체크포인트 로드 checkpoint_{epoch}.pt
+        # files = os.listdir(args.checkpoint)
+        # checkpoint_files = [f for f in files if f.startswith('checkpoint_') and f.endswith('.pt')]
+        # checkpoint_files.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
+        # model_path = checkpoint_files[-1] if checkpoint_files else None
+        model_path = os.path.join(args.checkpoint, 'last.pt')
         if os.path.exists(model_path):
             checkpoint = torch.load(model_path, map_location='cpu')
             
@@ -367,6 +367,7 @@ def train_kobart(rank, args):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
             
             xm.optimizer_step(optimizer)
+            scheduler.step()
             
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
@@ -392,7 +393,6 @@ def train_kobart(rank, args):
 
         if is_local_master:
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss, val_loss)
-        scheduler.step()
     xm.rendezvous('init')
 
     if is_local_master:
