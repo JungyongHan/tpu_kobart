@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch_xla
-from torch_xla.amp import syncfree
+from torch_xla.amp import syncfree, autocast
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
@@ -116,8 +116,9 @@ def train_step(model, batch, optimizer, device):
     labels = batch['labels'].to(device)
     
     # 순전파
-    outputs = model(input_ids, decoder_input_ids, labels)
-    loss = outputs.loss
+    with autocast(xm.xla_device()):
+        outputs = model(input_ids, decoder_input_ids, labels)
+        loss = outputs.loss
     # 역전파
     loss.backward()
     
@@ -345,6 +346,7 @@ def train_kobart(rank, args):
             
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
+                print(epoch_loss.item() / epoch_steps)
                 xm.add_step_closure(
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
