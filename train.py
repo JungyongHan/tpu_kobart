@@ -84,7 +84,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2', torch_dtype=torch.bfloat16)
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
@@ -342,17 +342,16 @@ def train_kobart(rank, args):
             epoch_steps += 1
             global_step += 1
 
-            if xm.is_master_ordinal(False):
-                logger.info(epoch_loss.item() / epoch_steps)
-
             # 로깅 (비동기적으로 처리)
             if is_local_master and (global_step - 1) % args.logging_steps == 0:
                 xm.add_step_closure(
                     _log_summary, args=(epoch, step, total_steps, None, time.time()-start_time),
                     run_async=True
                 )
+        total_loss = xm.all_reduce(xm.REDUCE_SUM, [epoch_loss], scale=1.0 / xr.world_size())
+        torch_xla.sync()
         if is_local_master:
-            total_loss = epoch_loss.item() / epoch_steps
+            total_loss = total_loss.item() / epoch_steps
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss)
         scheduler.step()
     xm.rendezvous('init')
