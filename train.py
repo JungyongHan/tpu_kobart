@@ -278,21 +278,21 @@ def train_kobart(rank, args):
 
     # 스케줄러 설정 - Linear Warmup 사용
     # 총 학습 스텝 계산
+    # # 웜업 스텝 계산 (전체 스텝의 10%)
     total_steps = len(train_loader) * args.max_epochs
-    # 웜업 스텝 계산 (전체 스텝의 10%)
-    warmup_steps = int(total_steps * 0.05)
+    warmup_steps = int(total_steps * 0.1)
     
-    # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
-    #     optimizer,
-    #     num_warmup_steps=warmup_steps,
-    #     num_training_steps=total_steps,
-    #     num_cycles=10  # 1000에포크라면 5~10 추천
-    # )
-    scheduler = get_linear_schedule_with_warmup(
+    scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
-        num_training_steps=total_steps
+        num_training_steps=total_steps,
+        num_cycles=3  
     )
+    # scheduler = get_linear_schedule_with_warmup(
+    #     optimizer,
+    #     num_warmup_steps=warmup_steps,
+    #     num_training_steps=total_steps
+    # )
     
     # 체크포인트에서 이어서 학습
     start_epoch = 0
