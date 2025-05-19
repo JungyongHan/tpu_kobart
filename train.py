@@ -15,7 +15,7 @@ import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
 
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
-from transformers.optimization import get_linear_schedule_with_warmup
+from transformers.optimization import get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
 
 import wandb
 
@@ -85,7 +85,7 @@ class ArgsBase():
 class KoBARTSummaryModel(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v2')
+        self.model = BartForConditionalGeneration.from_pretrained('gogamza/kobart-base-v1')
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
@@ -196,7 +196,7 @@ def train_kobart(rank, args):
         
     
     # 토크나이저 설정
-    tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v2')
+    tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v1')
     special_tokens_dict = {'additional_special_tokens': ['<LF>']}
     tokenizer.add_special_tokens(special_tokens_dict)
     
@@ -280,8 +280,14 @@ def train_kobart(rank, args):
     # 총 학습 스텝 계산
     total_steps = len(train_loader) * args.max_epochs
     # 웜업 스텝 계산 (전체 스텝의 10%)
-    warmup_steps = int(total_steps * 0.1)
+    warmup_steps = int(total_steps * 0.05)
     
+    # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+    #     optimizer,
+    #     num_warmup_steps=warmup_steps,
+    #     num_training_steps=total_steps,
+    #     num_cycles=10  # 1000에포크라면 5~10 추천
+    # )
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
