@@ -238,7 +238,7 @@ def train_kobart(rank, args):
         train_dataset,
         num_replicas=xr.world_size(),
         rank=xr.global_ordinal(),
-        shuffle=False
+        shuffle=True
     )
     
     train_loader = torch.utils.data.DataLoader(
