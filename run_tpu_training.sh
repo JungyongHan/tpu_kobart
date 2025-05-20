@@ -8,9 +8,10 @@ git stash pop
 # 학습 실행
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
+    --test_file./data/test.csv \
     --batch_size 16 \
     --max_len 1026 \
-    --max_epochs 100 \
+    --max_epochs 200 \
     --lr 4e-5 \
     --gradient_clip_val 1.0 \
     --checkpoint ./checkpoint/ \
