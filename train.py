@@ -280,19 +280,19 @@ def train_kobart(rank, args):
     # 총 학습 스텝 계산
     # # 웜업 스텝 계산 (전체 스텝의 10%)
     total_steps = len(train_loader) * args.max_epochs
-    warmup_steps = int(total_steps * 0.02)
+    warmup_steps = int(total_steps * 0.05)
     
-    # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
-    #     optimizer,
-    #     num_warmup_steps=warmup_steps,
-    #     num_training_steps=total_steps,
-    #     num_cycles=3  
-    # )
-    scheduler = get_linear_schedule_with_warmup(
+    scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
-        num_training_steps=total_steps
+        num_training_steps=total_steps,
+        num_cycles=3
     )
+    # scheduler = get_linear_schedule_with_warmup(
+    #     optimizer,
+    #     num_warmup_steps=warmup_steps,
+    #     num_training_steps=total_steps
+    # )
     
     # 체크포인트에서 이어서 학습
     start_epoch = 0
