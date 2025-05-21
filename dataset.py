@@ -24,8 +24,6 @@ class KoBARTSummaryDataset(Dataset):
                 f"'{self.newline_token}' 토큰이 토크나이저에 의해 UNK 토큰으로 처리됩니다. "
                 f"토큰이 올바르게 추가되었는지, 그리고 모델의 임베딩 레이어가 업데이트되었는지 확인하세요."
             )
-        else:
-            print(f"'{self.newline_token}' 토큰이 ID {newline_token_id}로 성공적으로 확인되었습니다.")
 
         # 데이터 전처리
         self.docs = self.preprocess_data(self.docs)

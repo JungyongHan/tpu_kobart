@@ -200,8 +200,7 @@ def train_kobart(rank, args):
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v1')
     special_tokens_dict = {'additional_special_tokens': ['<LF>']}
-    num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
-    print(f"Added {num_added_toks} new tokens.")
+    tokenizer.add_special_tokens(special_tokens_dict)
 
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
