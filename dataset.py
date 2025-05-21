@@ -169,7 +169,6 @@ class KoBARTSummaryDataset(Dataset):
         # 레이블 생성 (패딩 부분 -100으로 마스킹)
         labels = decoder_inputs['input_ids'][0].copy()
         labels[labels == self.tokenizer.pad_token_id] = self.ignore_index
-        labels = np.append(labels[1:], self.ignore_index)  # Teacher Forcing을 위한 시프트
 
         return {
             'input_ids': encoder_inputs['input_ids'][0].astype(np.int32),
