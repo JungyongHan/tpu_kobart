@@ -89,14 +89,12 @@ class KoBARTSummaryModel(nn.Module):
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
-    def forward(self, input_ids, decoder_input_ids, labels):
-        attention_mask = input_ids.ne(self.pad_token_id).float()
-        decoder_attention_mask = decoder_input_ids.ne(self.pad_token_id).float()
+    def forward(self, input_ids, attention_mask, decoder_input_ids, labels): 
         return self.model(
             input_ids=input_ids,
-            attention_mask=attention_mask,
+            attention_mask=attention_mask, # 전달받은 mask 사용
             decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
+            decoder_attention_mask=decoder_attention_mask, # 생성 또는 전달받은 mask 사용
             labels=labels,
             return_dict=True
         )
@@ -114,9 +112,14 @@ def train_step(model, batch, optimizer, device):
     input_ids = batch['input_ids'].to(device)
     decoder_input_ids = batch['decoder_input_ids'].to(device)
     labels = batch['labels'].to(device)
-    
+    attention_mask = batch['attention_mask'].to(device)
     # 순전파
-    outputs = model(input_ids, decoder_input_ids, labels)
+    outputs = model(
+        input_ids=input_ids, 
+        attention_mask=attention_mask,
+        decoder_input_ids=decoder_input_ids, 
+        labels=labels
+    )
     loss = outputs.loss
     # 역전파
     loss.backward()

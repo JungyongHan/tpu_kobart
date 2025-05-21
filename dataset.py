@@ -6,18 +6,20 @@ import torch_xla.core.xla_model as xm
 pd.set_option('mode.chained_assignment', None)
 
 class KoBARTSummaryDataset(Dataset):
-    def __init__(self, file, tokenizer, max_len, ignore_index=-100):
+    def __init__(self, file, tokenizer, max_len=512, ignore_index=-100):
         super().__init__()
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.docs = pd.read_csv(file)
-        # 개행문자를 위한 특수 토큰 정의
-        self.newline_token = '<LF>'
+        self.newline_token = '<LF>'  # 토크나이저에 추가된 특수 토큰
+        self.ignore_index = ignore_index
+        
+        # 토크나이저 검증
+        if self.newline_token not in self.tokenizer.added_tokens_decoder:
+            raise ValueError(f"'{self.newline_token}' 토큰이 토크나이저에 추가되어 있지 않음")
+            
         self.docs = self.preprocess_data(self.docs)
         self.len = self.docs.shape[0]
-
-        self.pad_index = self.tokenizer.pad_token_id
-        self.ignore_index = ignore_index
 
     # 데이터 전처리 함수 정의
     def preprocess_data(self, data):
@@ -88,43 +90,83 @@ class KoBARTSummaryDataset(Dataset):
         data['script'] = data['script'].apply(clean_spaces)
         
         data = data.drop(['article_len', 'script_len'], axis=1)
+        data = data[data['article'].str.strip().astype(bool) & data['script'].str.strip().astype(bool)]
         return data
 
-    def add_padding_data(self, inputs):
-        if len(inputs) < self.max_len:
-            pad = np.array([self.pad_index] *(self.max_len - len(inputs)))
-            inputs = np.concatenate([inputs, pad])
-        else:
-            inputs = inputs[:self.max_len]
+    # def add_padding_data(self, inputs):
+    #     if len(inputs) < self.max_len:
+    #         pad = np.array([self.pad_index] *(self.max_len - len(inputs)))
+    #         inputs = np.concatenate([inputs, pad])
+    #     else:
+    #         inputs = inputs[:self.max_len]
 
-        return inputs
+    #     return inputs
 
-    def add_ignored_data(self, inputs):
-        if len(inputs) < self.max_len:
-            pad = np.array([self.ignore_index] *(self.max_len - len(inputs)))
-            inputs = np.concatenate([inputs, pad])
-        else:
-            inputs = inputs[:self.max_len]
+    # def add_ignored_data(self, inputs):
+    #     if len(inputs) < self.max_len:
+    #         pad = np.array([self.ignore_index] *(self.max_len - len(inputs)))
+    #         inputs = np.concatenate([inputs, pad])
+    #     else:
+    #         inputs = inputs[:self.max_len]
 
-        return inputs
+    #     return inputs
     
+    # def __getitem__(self, idx):
+    #     instance = self.docs.iloc[idx]
+    #     instance['script'] = instance['script'].replace('\n', self.newline_token)
+    #     input_ids = self.tokenizer.encode(instance['article'])
+    #     input_ids = self.add_padding_data(input_ids)
+
+    #     label_ids = self.tokenizer.encode(instance['script'])
+    #     label_ids.append(self.tokenizer.eos_token_id)
+    #     dec_input_ids = [self.tokenizer.eos_token_id]
+    #     dec_input_ids += label_ids[:-1]
+    #     dec_input_ids = self.add_padding_data(dec_input_ids)
+    #     label_ids = self.add_ignored_data(label_ids)
+
+    #     return {'input_ids': np.array(input_ids, dtype=np.int_),
+    #             'decoder_input_ids': np.array(dec_input_ids, dtype=np.int_),
+    #             'labels': np.array(label_ids, dtype=np.int_)
+    #            }
+
     def __getitem__(self, idx):
         instance = self.docs.iloc[idx]
-        instance['script'] = instance['script'].replace('\n', self.newline_token)
-        input_ids = self.tokenizer.encode(instance['article'])
-        input_ids = self.add_padding_data(input_ids)
+        
+        # 인코딩 통합 처리
+        article = instance['article'].replace('\n', self.newline_token)
+        script = instance['script'].replace('\n', self.newline_token)
 
-        label_ids = self.tokenizer.encode(instance['script'])
-        label_ids.append(self.tokenizer.eos_token_id)
-        dec_input_ids = [self.tokenizer.eos_token_id]
-        dec_input_ids += label_ids[:-1]
-        dec_input_ids = self.add_padding_data(dec_input_ids)
-        label_ids = self.add_ignored_data(label_ids)
+        # 인코더 입력 처리 (최대 길이-2: [CLS], [SEP] 공간 보존)
+        encoder_inputs = self.tokenizer(
+            article,
+            max_length=self.max_len-2,
+            padding='max_length',
+            truncation=True,
+            return_tensors='np',
+            add_special_tokens=True
+        )
 
-        return {'input_ids': np.array(input_ids, dtype=np.int_),
-                'decoder_input_ids': np.array(dec_input_ids, dtype=np.int_),
-                'labels': np.array(label_ids, dtype=np.int_)
-               }
+        # 디코더 입력 처리 (레이블 생성을 위한 별도 인코딩)
+        decoder_inputs = self.tokenizer(
+            script,
+            max_length=self.max_len-1,  # [EOS] 공간 보존
+            padding='max_length',
+            truncation=True,
+            return_tensors='np',
+            add_special_tokens=True
+        )
+
+        # 레이블 생성 (패딩 부분 -100으로 마스킹)
+        labels = decoder_inputs['input_ids'][0].copy()
+        labels[labels == self.tokenizer.pad_token_id] = self.ignore_index
+        labels = np.append(labels[1:], self.ignore_index)  # Teacher Forcing을 위한 시프트
+
+        return {
+            'input_ids': encoder_inputs['input_ids'][0].astype(np.int32),
+            'attention_mask': encoder_inputs['attention_mask'][0].astype(np.float32),
+            'decoder_input_ids': decoder_inputs['input_ids'][0].astype(np.int32),
+            'labels': labels.astype(np.int32)
+        }
 
     def __len__(self):
         return self.len
