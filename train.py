@@ -89,11 +89,14 @@ class KoBARTSummaryModel(nn.Module):
         self.model.resize_token_embeddings(len(tokenizer))
         self.pad_token_id = tokenizer.pad_token_id
         
-    def forward(self, input_ids, attention_mask, decoder_input_ids, labels): 
+    def forward(self, input_ids, decoder_input_ids, labels):
+        attention_mask = input_ids.ne(self.pad_token_id).float()
+        decoder_attention_mask = decoder_input_ids.ne(self.pad_token_id).float()
         return self.model(
             input_ids=input_ids,
-            attention_mask=attention_mask, # 전달받은 mask 사용
+            attention_mask=attention_mask,
             decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
             labels=labels,
             return_dict=True
         )
@@ -111,14 +114,9 @@ def train_step(model, batch, optimizer, device):
     input_ids = batch['input_ids'].to(device)
     decoder_input_ids = batch['decoder_input_ids'].to(device)
     labels = batch['labels'].to(device)
-    attention_mask = batch['attention_mask'].to(device)
+    
     # 순전파
-    outputs = model(
-        input_ids=input_ids, 
-        attention_mask=attention_mask,
-        decoder_input_ids=decoder_input_ids, 
-        labels=labels
-    )
+    outputs = model(input_ids, decoder_input_ids, labels)
     loss = outputs.loss
     # 역전파
     loss.backward()
@@ -201,7 +199,7 @@ def train_kobart(rank, args):
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v1')
     special_tokens_dict = {'additional_special_tokens': ['<LF>']}
     tokenizer.add_special_tokens(special_tokens_dict)
-
+    
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
     if os.path.exists(args.test_file):
