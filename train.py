@@ -202,7 +202,6 @@ def train_kobart(rank, args):
     special_tokens_dict = {'additional_special_tokens': ['<LF>']}
     num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
     print(f"Added {num_added_toks} new tokens.")
-    print(f"Added tokens decoder: {tokenizer.added_tokens_decoder}")
 
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)

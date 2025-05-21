@@ -13,11 +13,21 @@ class KoBARTSummaryDataset(Dataset):
         self.docs = pd.read_csv(file)
         self.newline_token = '<LF>'  # 토크나이저에 추가된 특수 토큰
         self.ignore_index = ignore_index
-        
-        # 토크나이저 검증
-        if self.newline_token not in self.tokenizer.added_tokens_decoder:
-            raise ValueError(f"'{self.newline_token}' 토큰이 토크나이저에 추가되어 있지 않음")
-            
+        newline_token_id = self.tokenizer.convert_tokens_to_ids(self.newline_token)
+        if newline_token_id == self.tokenizer.unk_token_id:
+            # 이 경우, 토큰이 토크나이저에게 인식되지 않는다는 의미입니다.
+            print(f"Debug: self.newline_token = '{self.newline_token}'")
+            print(f"Debug: Converted ID = {newline_token_id}")
+            print(f"Debug: UNK ID = {self.tokenizer.unk_token_id}")
+            print(f"Debug: self.tokenizer.added_tokens_decoder = {self.tokenizer.added_tokens_decoder}")
+            raise ValueError(
+                f"'{self.newline_token}' 토큰이 토크나이저에 의해 UNK 토큰으로 처리됩니다. "
+                f"토큰이 올바르게 추가되었는지, 그리고 모델의 임베딩 레이어가 업데이트되었는지 확인하세요."
+            )
+        else:
+            print(f"'{self.newline_token}' 토큰이 ID {newline_token_id}로 성공적으로 확인되었습니다.")
+
+        # 데이터 전처리
         self.docs = self.preprocess_data(self.docs)
         self.len = self.docs.shape[0]
 
