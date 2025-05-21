@@ -139,7 +139,8 @@ class KoBARTSummaryDataset(Dataset):
         # 인코더 입력 처리 (최대 길이-2: [CLS], [SEP] 공간 보존)
         encoder_inputs = self.tokenizer(
             article,
-            max_length=self.max_len-2,
+            # max_length=self.max_len-2, add_special_tokens 추가로인해 주석처리
+            max_length=self.max_len,
             padding='max_length',
             truncation=True,
             return_tensors='np',
@@ -149,7 +150,8 @@ class KoBARTSummaryDataset(Dataset):
         # 디코더 입력 처리 (레이블 생성을 위한 별도 인코딩)
         decoder_inputs = self.tokenizer(
             script,
-            max_length=self.max_len-1,  # [EOS] 공간 보존
+            # max_length=self.max_len-1,  # [EOS] 공간 보존 add_special_tokens 추가로 인해 주석처리
+            max_length=self.max_len,
             padding='max_length',
             truncation=True,
             return_tensors='np',
