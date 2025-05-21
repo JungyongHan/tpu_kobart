@@ -354,13 +354,13 @@ def train_kobart(rank, args):
         # wandb 로깅
         if args.use_wandb:
             wandb.log({
-                "train/loss": loss.item(),
+                "train/loss": loss,
                 "train/lr": optimizer.param_groups[0]['lr'],
                 "train/step": global_step,
                 "train/epoch": epoch
             })
         else:
-            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss.item():.4f}, Time: {elapsed:.2f}s", flush=True)
+            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f}, Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
@@ -387,7 +387,7 @@ def train_kobart(rank, args):
             if xm.is_master_ordinal(False) and (global_step - 1) % args.logging_steps == 0:
                 # 콘솔 로깅
                 xm.add_step_closure(
-                    _log_summary, args=(epoch, step, total_steps, global_step, optimizer, loss, time.time()-start_time),
+                    _log_summary, args=(epoch, step, total_steps, global_step, optimizer, loss.item(), time.time()-start_time),
                     run_async=True
                 )
                 
