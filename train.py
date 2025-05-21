@@ -94,7 +94,6 @@ class KoBARTSummaryModel(nn.Module):
             input_ids=input_ids,
             attention_mask=attention_mask, # 전달받은 mask 사용
             decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask, # 생성 또는 전달받은 mask 사용
             labels=labels,
             return_dict=True
         )
