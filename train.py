@@ -200,8 +200,10 @@ def train_kobart(rank, args):
     # 토크나이저 설정
     tokenizer = PreTrainedTokenizerFast.from_pretrained('gogamza/kobart-base-v1')
     special_tokens_dict = {'additional_special_tokens': ['<LF>']}
-    tokenizer.add_special_tokens(special_tokens_dict)
-    
+    num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
+    print(f"Added {num_added_toks} new tokens.")
+    print(f"Added tokens decoder: {tokenizer.added_tokens_decoder}")
+
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
     if os.path.exists(args.test_file):
@@ -353,13 +355,13 @@ def train_kobart(rank, args):
         # wandb 로깅
         if args.use_wandb:
             wandb.log({
-                "train/loss": loss,
+                "train/loss": loss.item(),
                 "train/lr": optimizer.param_groups[0]['lr'],
                 "train/step": global_step,
                 "train/epoch": epoch
             })
         else:
-            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss:.4f}, Time: {elapsed:.2f}s", flush=True)
+            print(f"Epoch: {epoch}, Step: {step}/{total_steps}, Loss: {loss.item():.4f}, Time: {elapsed:.2f}s", flush=True)
 
     total_steps = len(train_loader)
     for epoch in range(start_epoch, args.max_epochs):
@@ -386,7 +388,7 @@ def train_kobart(rank, args):
             if xm.is_master_ordinal(False) and (global_step - 1) % args.logging_steps == 0:
                 # 콘솔 로깅
                 xm.add_step_closure(
-                    _log_summary, args=(epoch, step, total_steps, global_step, optimizer, loss.item(), time.time()-start_time),
+                    _log_summary, args=(epoch, step, total_steps, global_step, optimizer, loss, time.time()-start_time),
                     run_async=True
                 )
                 
