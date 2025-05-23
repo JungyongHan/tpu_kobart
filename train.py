@@ -16,6 +16,7 @@ import torch_xla.distributed.xla_backend
 
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
+from schedulers import CosineAnnealingWarmupRestarts
 
 import wandb
 
@@ -281,13 +282,23 @@ def train_kobart(rank, args):
     # # 웜업 스텝 계산 (전체 스텝의 10%)
     total_steps = len(train_loader) * args.max_epochs
     warmup_steps = int(total_steps * 0.05)
-    
-    scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+
+    scheduler = CosineAnnealingWarmupRestarts(
         optimizer,
-        num_warmup_steps=warmup_steps,
-        num_training_steps=total_steps,
-        num_cycles=3
+        first_cycle_steps=total_steps/3,
+        cycle_mult=1.0,
+        max_lr=1.5e-5,
+        min_lr=1e-9,
+        warmup_steps=warmup_steps,
+        gamma=0.5
     )
+    
+    # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+    #     optimizer,
+    #     num_warmup_steps=warmup_steps,
+    #     num_training_steps=total_steps,
+    #     num_cycles=3
+    # )
     # scheduler = get_linear_schedule_with_warmup(
     #     optimizer,
     #     num_warmup_steps=warmup_steps,

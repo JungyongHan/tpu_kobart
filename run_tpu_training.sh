@@ -11,7 +11,7 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --test_file ./data/test.csv \
     --batch_size 16 \
     --max_len 1022 \
-    --max_epochs 500 \
+    --max_epochs 100 \
     --lr 15e-6 \
     --gradient_clip_val 1.0 \
     --checkpoint ./checkpoint/ \
