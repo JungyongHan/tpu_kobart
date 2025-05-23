@@ -283,15 +283,15 @@ def train_kobart(rank, args):
     total_steps = len(train_loader) * args.max_epochs
     warmup_steps = int(total_steps * 0.05)
 
-    scheduler = CosineAnnealingWarmupRestarts(
-        optimizer,
-        first_cycle_steps=total_steps/3,
-        cycle_mult=1.0,
-        max_lr=1.5e-5,
-        min_lr=1e-9,
-        warmup_steps=warmup_steps,
-        gamma=0.5
-    )
+    # scheduler = CosineAnnealingWarmupRestarts(
+    #     optimizer,
+    #     first_cycle_steps=total_steps/3,
+    #     cycle_mult=1.0,
+    #     max_lr=1.5e-5,
+    #     min_lr=1e-9,
+    #     warmup_steps=warmup_steps,
+    #     gamma=0.5
+    # )
     
     # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
     #     optimizer,
@@ -299,11 +299,11 @@ def train_kobart(rank, args):
     #     num_training_steps=total_steps,
     #     num_cycles=3
     # )
-    # scheduler = get_linear_schedule_with_warmup(
-    #     optimizer,
-    #     num_warmup_steps=warmup_steps,
-    #     num_training_steps=total_steps
-    # )
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
+    )
     
     # 체크포인트에서 이어서 학습
     start_epoch = 0
