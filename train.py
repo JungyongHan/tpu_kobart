@@ -281,7 +281,7 @@ def train_kobart(rank, args):
     # 스케줄러 설정 - Linear Warmup 사용
     # 총 학습 스텝 계산
     # # 웜업 스텝 계산 (전체 스텝의 10%)
-    lr = args.lr * xr.world_size()
+    lr = 0.01 * xr.world_size()
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=lr,
