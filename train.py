@@ -322,7 +322,6 @@ def train_kobart(rank, args):
         num_training_steps=total_steps
     )
     
-    model = DDP(model, gradient_as_bucket_view=True)
 
     # 체크포인트에서 이어서 학습
     start_epoch = 0
