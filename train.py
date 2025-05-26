@@ -403,15 +403,19 @@ def train_kobart(rank, args):
                 if args.gradient_clip_val > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
 
-                # KoBARTSummaryModel에서 encoder 접근
-                encoder_weight_sum = model.model.get_encoder().embed_tokens.weight.sum()
-                print(f'> 1 step: {step} rank: {rank} encoder_sum: {encoder_weight_sum.item():.6f}')
+                lm_head_before = model.model.lm_head.weight.sum()
+                print(f'> 1 step: {step} rank: {rank} lm_head: {lm_head_before.item():.6f}')
 
                 xm.optimizer_step(optimizer)
                 scheduler.step()
 
-                encoder_weight_sum_after = model.model.get_encoder().embed_tokens.weight.sum()
-                print(f'2 step: {step} rank: {rank} encoder_sum: {encoder_weight_sum_after.item():.6f}')
+                lm_head_after = model.model.lm_head.weight.sum()
+                print(f'2 step: {step} rank: {rank} lm_head: {lm_head_after.item():.6f}')
+
+                # 변화량도 확인
+                change = (lm_head_after - lm_head_before).abs()
+                print(f'Change: {change.item():.8f}')
+
 
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
