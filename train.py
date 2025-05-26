@@ -404,13 +404,13 @@ def train_kobart(rank, args):
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
 
 
-                encoder_weight_sum = model.model.encoder.embed_tokens.weight.sum()
+                encoder_weight_sum = model.encoder.embed_tokens.weight.sum()
                 print(f'> 1 step: {step} rank: {rank} encoder_sum: {encoder_weight_sum.item():.6f}')
 
                 xm.optimizer_step(optimizer)
                 scheduler.step()
                 
-                encoder_weight_sum_after = model.model.encoder.embed_tokens.weight.sum()
+                encoder_weight_sum_after = model.encoder.embed_tokens.weight.sum()
                 print(f'2 step: {step} rank: {rank} encoder_sum: {encoder_weight_sum_after.item():.6f}')
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
