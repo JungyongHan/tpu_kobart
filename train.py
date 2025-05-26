@@ -5,6 +5,7 @@ import os
 import time
 from loguru import logger
 import math
+import random
 import torch
 import torch.optim
 import torch.nn as nn
@@ -14,6 +15,7 @@ from torch_xla.amp import syncfree, autocast
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
+
 
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
