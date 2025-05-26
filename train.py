@@ -9,6 +9,7 @@ import random
 import torch
 import torch.optim
 import torch.nn as nn
+from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import torch_xla
 from torch_xla.amp import syncfree, autocast
@@ -112,8 +113,6 @@ class KoBARTSummaryModel(nn.Module):
 
 
 def train_step(model, batch, optimizer, device):
-    model.train()
-    
     # 데이터를 디바이스로 이동
     input_ids = batch['input_ids'].to(device)
     decoder_input_ids = batch['decoder_input_ids'].to(device)
@@ -323,6 +322,8 @@ def train_kobart(rank, args):
         num_training_steps=total_steps
     )
     
+    model = DDP(model, gradient_as_bucket_view=True)
+
     # 체크포인트에서 이어서 학습
     start_epoch = 0
     global_step = 0
@@ -393,17 +394,19 @@ def train_kobart(rank, args):
         epoch_loss = torch.tensor(0.0, device=device).detach()
         epoch_steps = 0
         start_time = time.time()
-        
+
+        model.train()
         for step, batch in enumerate(train_loader):
-            optimizer.zero_grad()
-            loss = train_step(model, batch, optimizer, device)
-            
-            if args.gradient_clip_val > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
-            
-            xm.optimizer_step(optimizer)
-            scheduler.step()
-            
+            with torch_xla.step():
+                optimizer.zero_grad()
+                loss = train_step(model, batch, optimizer, device)
+                
+                if args.gradient_clip_val > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
+                
+                xm.optimizer_step(optimizer)
+                scheduler.step()
+                
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
             epoch_steps += 1
