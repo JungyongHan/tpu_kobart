@@ -12,7 +12,7 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --batch_size 8 \
     --max_len 1022 \
     --max_epochs 100 \
-    --lr 13e-6 \
+    --lr 5e-6 \
     --gradient_clip_val 1.0 \
     --checkpoint ./checkpoint/ \
     --num_workers 16 \
