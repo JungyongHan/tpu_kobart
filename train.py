@@ -177,8 +177,10 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
 
 def train_kobart(rank, args):
     # 시드 설정
-    torch.manual_seed(42)
-    np.random.seed(42)
+    seed = 42 + rank
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
     dist.init_process_group("xla", init_method='xla://')
     device = xm.xla_device()
     
@@ -268,31 +270,34 @@ def train_kobart(rank, args):
 
     xm.broadcast_master_param(model)
     
+    # for testing lr
+    args.lr = 3e-5 * xr.world_size()
     
     # 옵티마이저 설정
-    # param_optimizer = list(model.named_parameters())
-    # no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
-    # optimizer_grouped_parameters = [
-    #     {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-    #     {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    # ]
-    # optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
+    param_optimizer = list(model.named_parameters())
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]
+    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
-    # 스케줄러 설정 - Linear Warmup 사용
-    # 총 학습 스텝 계산
-    # # 웜업 스텝 계산 (전체 스텝의 10%)
-    lr = 0.01 * xr.world_size()
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=lr,
-        momentum=0.9,
-        weight_decay=1e-4)
+    # # 스케줄러 설정 - Linear Warmup 사용
+    # # 총 학습 스텝 계산
+    # # # 웜업 스텝 계산 (전체 스텝의 10%)
+    # lr = 0.01 * xr.world_size()
+    # optimizer = torch.optim.SGD(
+    #     model.parameters(),
+    #     lr=lr,
+    #     momentum=0.9,
+    #     weight_decay=1e-4)
 
-    num_training_steps_per_epoch = len(train_loader) // (
-        args.batch_size * xr.world_size())
-    scheduler = None
-    # total_steps = len(train_loader) * args.max_epochs
-    # warmup_steps = int(total_steps * 0.05)
+    # num_training_steps_per_epoch = len(train_loader) // (
+    #     args.batch_size * xr.world_size())
+    # scheduler = None
+
+    total_steps = len(train_loader) * args.max_epochs
+    warmup_steps = int(total_steps * 0.1)
     # scheduler = CosineAnnealingWarmupRestarts(
     #     optimizer,
     #     first_cycle_steps=total_steps/3,
@@ -309,11 +314,12 @@ def train_kobart(rank, args):
     #     num_training_steps=total_steps,
     #     num_cycles=3
     # )
-    # scheduler = get_linear_schedule_with_warmup(
-    #     optimizer,
-    #     num_warmup_steps=warmup_steps,
-    #     num_training_steps=total_steps
-    # )
+
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
+    )
     
     # 체크포인트에서 이어서 학습
     start_epoch = 0
@@ -394,7 +400,7 @@ def train_kobart(rank, args):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
             
             xm.optimizer_step(optimizer)
-            # scheduler.step()
+            scheduler.step()
             
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
