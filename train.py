@@ -273,7 +273,7 @@ def train_kobart(rank, args):
     xm.broadcast_master_param(model)
     
     # for testing lr
-    args.lr = 3e-5 * xr.world_size()
+    # args.lr = 3e-5 * xr.world_size()
     
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
