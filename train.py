@@ -403,10 +403,10 @@ def train_kobart(rank, args):
                 
                 if args.gradient_clip_val > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
-                print(f'> 1 step: {step} rank: {rank} sum:{model.net1.weight.sum()}')
+                print(f'> 1 step: {step} rank: {rank} sum:{model.module.net1.weight.sum()}')
                 xm.optimizer_step(optimizer)
                 scheduler.step()
-                print(f'2 step: {step} rank: {rank} sum:{model.net1.weight.sum()}')
+                print(f'2 step: {step} rank: {rank} sum:{model.module.net1.weight.sum()}')
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
             epoch_steps += 1
