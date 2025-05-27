@@ -6,23 +6,33 @@ import torch_xla.core.xla_model as xm
 pd.set_option('mode.chained_assignment', None)
 
 class KoBARTSummaryDataset(Dataset):
-    def __init__(self, file, tokenizer, max_len, ignore_index=-100):
+    # def __init__(self, file, tokenizer, max_len, ignore_index=-100):
+    #     super().__init__()
+    #     self.tokenizer = tokenizer
+    #     self.max_len = max_len
+    #     self.docs = pd.read_csv(file)
+    #     # 개행문자를 위한 특수 토큰 정의
+    #     self.newline_token = '<LF>'
+    #     self.docs = self.preprocess_data(self.docs)
+    #     self.len = self.docs.shape[0]
+
+    #     self.pad_index = self.tokenizer.pad_token_id
+    #     self.ignore_index = ignore_index
+
+    def __init__(self, file, tokenizer, max_len):
         super().__init__()
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.docs = pd.read_csv(file)
-        # 개행문자를 위한 특수 토큰 정의
         self.newline_token = '<LF>'
         self.docs = self.preprocess_data(self.docs)
         self.len = self.docs.shape[0]
 
-        self.pad_index = self.tokenizer.pad_token_id
-        self.ignore_index = ignore_index
-
     # 데이터 전처리 함수 정의
     def preprocess_data(self, data):
         # NaN 값 제거
-        original_len = len(data)
+        if xm.is_master_ordinal():
+            original_len = len(data)
         data['article'] = data['article'].astype(str)
         data['script'] = data['script'].astype(str)
 
@@ -30,10 +40,7 @@ class KoBARTSummaryDataset(Dataset):
         data['script_len'] = data['script'].apply(len)
 
         data = data[data['article_len'] > data['script_len']]
-        filtered_len = len(data)
-        if xm.is_master_ordinal():
-            print(f"데이터 필터링: {original_len}개 중 {filtered_len}개 남음 ({original_len - filtered_len}개 제외)")
-        
+
         def convert_br_to_blank(text):
             return text.replace('<br>', '')
 
@@ -88,43 +95,80 @@ class KoBARTSummaryDataset(Dataset):
         data['script'] = data['script'].apply(clean_spaces)
         
         data = data.drop(['article_len', 'script_len'], axis=1)
+        if xm.is_master_ordinal():
+            print(f"데이터 필터링 전 데이터 개수: {original_len}, 필터링 후 데이터 개수: {len(data)}")
         return data
 
-    def add_padding_data(self, inputs):
-        if len(inputs) < self.max_len:
-            pad = np.array([self.pad_index] *(self.max_len - len(inputs)))
-            inputs = np.concatenate([inputs, pad])
-        else:
-            inputs = inputs[:self.max_len]
-
-        return inputs
-
-    def add_ignored_data(self, inputs):
-        if len(inputs) < self.max_len:
-            pad = np.array([self.ignore_index] *(self.max_len - len(inputs)))
-            inputs = np.concatenate([inputs, pad])
-        else:
-            inputs = inputs[:self.max_len]
-
-        return inputs
-    
     def __getitem__(self, idx):
         instance = self.docs.iloc[idx]
         instance['script'] = instance['script'].replace('\n', self.newline_token)
-        input_ids = self.tokenizer.encode(instance['article'])
-        input_ids = self.add_padding_data(input_ids)
-
-        label_ids = self.tokenizer.encode(instance['script'])
+        
+        # 토크나이저의 특수 토큰 처리 활용
+        input_ids = self.tokenizer.encode(
+            instance['article'], 
+            max_length=self.max_len,
+            truncation=True,
+            add_special_tokens=False  # input에는 특수 토큰 불필요
+        )
+        
+        label_ids = self.tokenizer.encode(
+            instance['script'],
+            max_length=self.max_len - 1,  # EOS 공간 확보
+            truncation=True,
+            add_special_tokens=False
+        )
         label_ids.append(self.tokenizer.eos_token_id)
-        dec_input_ids = [self.tokenizer.eos_token_id]
-        dec_input_ids += label_ids[:-1]
-        dec_input_ids = self.add_padding_data(dec_input_ids)
-        label_ids = self.add_ignored_data(label_ids)
+        
+        dec_input_ids = [self.tokenizer.eos_token_id] + label_ids[:-1]
 
-        return {'input_ids': np.array(input_ids, dtype=np.int_),
-                'decoder_input_ids': np.array(dec_input_ids, dtype=np.int_),
-                'labels': np.array(label_ids, dtype=np.int_)
-               }
+        return {
+            'input_ids': input_ids,
+            'decoder_input_ids': dec_input_ids,
+            'labels': label_ids
+        }
+
+
+
+    # def add_padding_data(self, inputs):
+    #     if len(inputs) < self.max_len:
+    #         pad = np.array([self.pad_index] *(self.max_len - len(inputs)))
+    #         inputs = np.concatenate([inputs, pad])
+    #     else:
+    #         inputs = inputs[:self.max_len]
+
+    #     return inputs
+
+    # def add_ignored_data(self, inputs):
+    #     if len(inputs) < self.max_len:
+    #         pad = np.array([self.ignore_index] *(self.max_len - len(inputs)))
+    #         inputs = np.concatenate([inputs, pad])
+    #     else:
+    #         inputs = inputs[:self.max_len]
+
+    #     return inputs
+    
+    # def __getitem__(self, idx):
+    #     instance = self.docs.iloc[idx]
+    #     instance['script'] = instance['script'].replace('\n', self.newline_token)
+    #     input_ids = self.tokenizer.encode(instance['article'])
+    #     input_ids = self.add_padding_data(input_ids)
+
+    #     label_ids = self.tokenizer.encode(instance['script'])
+    #     label_ids.append(self.tokenizer.eos_token_id)
+    #     dec_input_ids = [self.tokenizer.eos_token_id]
+    #     dec_input_ids += label_ids[:-1]
+    #     dec_input_ids = self.add_padding_data(dec_input_ids)
+    #     label_ids = self.add_ignored_data(label_ids)
+
+    #     if xm.is_master_ordinal(False):
+    #         padding_ratio = (label_ids == self.ignore_index).sum() / len(label_ids)
+    #         print(f"Sample {idx}: Padding ratio = {padding_ratio:.2%}")
+
+
+    #     return {'input_ids': np.array(input_ids, dtype=np.int_),
+    #             'decoder_input_ids': np.array(dec_input_ids, dtype=np.int_),
+    #             'labels': np.array(label_ids, dtype=np.int_)
+    #            }
 
     def __len__(self):
         return self.len

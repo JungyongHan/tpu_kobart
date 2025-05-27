@@ -17,7 +17,7 @@ import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
 
-
+from transformers import DataCollatorForSeq2Seq
 from transformers import BartForConditionalGeneration, PreTrainedTokenizerFast
 from transformers.optimization import get_linear_schedule_with_warmup, get_cosine_with_hard_restarts_schedule_with_warmup
 from schedulers import CosineAnnealingWarmupRestarts, WarmupAndExponentialDecayScheduler
@@ -207,6 +207,19 @@ def train_kobart(rank, args):
     
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
+
+        # 모델 설정
+    model = KoBARTSummaryModel(tokenizer)
+    model.to(device)
+
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        model=model.model,  # KoBARTSummaryModel의 내부 BART 모델
+        label_pad_token_id=-100,
+        pad_to_multiple_of=8,  # TPU 최적화
+        return_tensors="pt"
+    )
+
     if os.path.exists(args.test_file):
         logger.info("Loading validation dataset")
         val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
@@ -223,6 +236,7 @@ def train_kobart(rank, args):
             batch_size=args.batch_size,
             sampler=val_sampler,
             num_workers=args.num_workers,
+            collate_fn=data_collator, 
             drop_last=True,
             persistent_workers=True,
             prefetch_factor=16
@@ -238,7 +252,6 @@ def train_kobart(rank, args):
     else:
         val_loader = None
 
-    
     train_sampler = torch.utils.data.distributed.DistributedSampler(
         train_dataset,
         num_replicas=xr.world_size(),
@@ -251,6 +264,7 @@ def train_kobart(rank, args):
         batch_size=args.batch_size,
         sampler=train_sampler,
         num_workers=args.num_workers,
+        collate_fn=data_collator,  # 동적 패딩 적용
         drop_last=True,
         persistent_workers=True,
         prefetch_factor=16
@@ -265,9 +279,7 @@ def train_kobart(rank, args):
         host_to_device_transfer_threads=4
     )
     
-    # 모델 설정
-    model = KoBARTSummaryModel(tokenizer)
-    model.to(device)
+
 
     xm.broadcast_master_param(model)
     
