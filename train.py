@@ -193,12 +193,12 @@ def train_kobart(rank, args):
         os.makedirs(args.checkpoint, exist_ok=True)
         
         # wandb 초기화 (마스터 프로세스에서만)
-        # if args.use_wandb and xm.is_master_ordinal(False):
-        #     wandb.init(
-        #         project="MY TPU Training",
-        #         config=vars(args)
-        #     )
-        #     logger.info("Weights & Biases initialized")
+        if args.use_wandb and xm.is_master_ordinal(False):
+            wandb.init(
+                project="MY TPU Training",
+                config=vars(args)
+            )
+            logger.info("Weights & Biases initialized")
         
     
     # 토크나이저 설정
