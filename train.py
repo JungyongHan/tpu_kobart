@@ -276,9 +276,7 @@ def train_kobart(rank, args):
 
     xm.broadcast_master_param(model)
     
-    # for testing lr
-    # args.lr = 3e-5 * xr.world_size()
-    
+ 
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -286,7 +284,9 @@ def train_kobart(rank, args):
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=args.lr)
+
+    lr = args.lr * math.sqrt(xr.world_size())
+    optimizer = syncfree.AdamW(optimizer_grouped_parameters, lr=lr)
 
     # # 스케줄러 설정 - Linear Warmup 사용
     # # 총 학습 스텝 계산

@@ -9,10 +9,10 @@ git stash pop
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
     --test_file ./data/test.csv \
-    --batch_size 8 \
+    --batch_size 20 \
     --max_len 256 \
-    --max_epochs 100 \
-    --lr 5e-6 \
+    --max_epochs 500 \
+    --lr 3e-5 \
     --gradient_clip_val 1.0 \
     --checkpoint ./checkpoint/ \
     --num_workers 16 \
