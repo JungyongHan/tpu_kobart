@@ -7,7 +7,7 @@ git pull
 git stash pop
 # 학습 실행
 PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
-    --train_file ./data/test.csv \
+    --train_file ./data/train.csv \
     --test_file ./data/test.csv \
     --batch_size 20 \
     --max_len 256 \
