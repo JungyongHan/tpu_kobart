@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import torch_xla
-from torch_xla.amp import syncfree, autocast
+from torch_xla.amp import syncfree, autocast, GradScaler
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
@@ -112,17 +112,22 @@ class KoBARTSummaryModel(nn.Module):
 
 
 
-def train_step(model, batch, optimizer, device):
+def train_step(model, batch, optimizer, device, scaler):
     # 데이터를 디바이스로 이동
     input_ids = batch['input_ids'].to(device)
     decoder_input_ids = batch['decoder_input_ids'].to(device)
     labels = batch['labels'].to(device)
     
     # 순전파
-    outputs = model(input_ids, decoder_input_ids, labels)
-    loss = outputs.loss
-    # 역전파
-    loss.backward()
+    with autocast(xm.xla_device()):
+        outputs = model(input_ids, decoder_input_ids, labels)
+        loss = outputs.loss
+
+    scaler.scale(loss).backward()
+    gradients = xm._fetch_gradients(optimizer)
+    xm.all_reduce('sum', gradients, scale=1.0 / xr.world_size())
+    scaler.step(optimizer)
+    scaler.update()
     
     return loss
 
@@ -275,7 +280,7 @@ def train_kobart(rank, args):
     model.to(device)
 
     xm.broadcast_master_param(model)
-    
+    scaler = GradScaler()
  
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
@@ -403,12 +408,12 @@ def train_kobart(rank, args):
         for step, batch in enumerate(train_loader):
             with torch_xla.step():
                 optimizer.zero_grad()
-                loss = train_step(model, batch, optimizer, device)
+                loss = train_step(model, batch, optimizer, device, scaler)
                 
-                if args.gradient_clip_val > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
+                # if args.gradient_clip_val > 0:
+                #     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
 
-                xm.optimizer_step(optimizer)
+                # xm.optimizer_step(optimizer)
                 scheduler.step()
 
             # 손실 누적 (텐서 상태 유지)
