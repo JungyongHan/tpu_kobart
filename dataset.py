@@ -108,16 +108,20 @@ class KoBARTSummaryDataset(Dataset):
 
         return inputs
         
-    def analyze_padding_distribution(self, num_samples=1000):
+    def analyze_padding_distribution(self):
         """패딩 분포를 분석하는 메서드"""
         input_ratios = []
         label_ratios = []
         script_lengths = []
         
-        sample_indices = np.random.choice(len(self.docs), min(num_samples, len(self.docs)), replace=False)
+        dataset = self.docs
+        print(f"Analyzing {len(dataset)} samples...")
         
-        for idx in sample_indices:
-            instance = self.docs.iloc[idx]
+        for idx in range(len(dataset)):
+            if idx % 1000 == 0:
+                print(f"Processing {idx}/{len(dataset)}")
+                
+            instance = dataset.iloc[idx]
             
             # 원본 길이
             original_script_len = len(self.tokenizer.encode(instance['script']))
@@ -133,16 +137,38 @@ class KoBARTSummaryDataset(Dataset):
             input_ratios.append(input_padding_ratio)
             label_ratios.append(label_padding_ratio)
         
-        print(f"=== Padding Analysis (n={len(sample_indices)}) ===")
+        # 고패딩 샘플 분석
+        high_padding_70 = np.sum(np.array(label_ratios) > 0.7)
+        high_padding_80 = np.sum(np.array(label_ratios) > 0.8)
+        high_padding_90 = np.sum(np.array(label_ratios) > 0.9)
+        
+        print(f"=== Padding Analysis (n={len(dataset)}) ===")
         print(f"Input padding ratio - Mean: {np.mean(input_ratios):.2%}, Std: {np.std(input_ratios):.2%}")
         print(f"Label padding ratio - Mean: {np.mean(label_ratios):.2%}, Std: {np.std(label_ratios):.2%}")
         print(f"Script length - Mean: {np.mean(script_lengths):.1f}, 95th percentile: {np.percentile(script_lengths, 95):.1f}")
         print(f"Max length setting: {self.max_len}")
+        print(f"High padding samples (>70%): {high_padding_70} out of {len(dataset)} ({high_padding_70/len(dataset):.1%})")
+        print(f"High padding samples (>80%): {high_padding_80} out of {len(dataset)} ({high_padding_80/len(dataset):.1%})")
+        print(f"High padding samples (>90%): {high_padding_90} out of {len(dataset)} ({high_padding_90/len(dataset):.1%})")
+        
+        # 권장 max_len 계산
+        recommended_max_len = int(np.percentile(script_lengths, 95) * 1.1)
+        print(f"Recommended max_len: {recommended_max_len} (95th percentile + 10%)")
         
         return {
             'input_padding_ratios': input_ratios,
             'label_padding_ratios': label_ratios,
-            'script_lengths': script_lengths
+            'script_lengths': script_lengths,
+            'stats': {
+                'input_mean': np.mean(input_ratios),
+                'label_mean': np.mean(label_ratios),
+                'script_mean': np.mean(script_lengths),
+                'script_95th': np.percentile(script_lengths, 95),
+                'high_padding_70': high_padding_70,
+                'high_padding_80': high_padding_80,
+                'high_padding_90': high_padding_90,
+                'recommended_max_len': recommended_max_len
+            }
         }
 
     def __getitem__(self, idx):
