@@ -10,7 +10,7 @@ PJRT_DEVICE=TPU | ~/venv/bin/python train.py \
     --train_file ./data/train.csv \
     --test_file ./data/test.csv \
     --batch_size 8 \
-    --max_len 1022 \
+    --max_len 256 \
     --max_epochs 100 \
     --lr 5e-6 \
     --gradient_clip_val 1.0 \

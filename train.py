@@ -208,12 +208,11 @@ def train_kobart(rank, args):
     
     # 데이터셋 및 데이터로더 설정
     train_dataset = KoBARTSummaryDataset(args.train_file, tokenizer, args.max_len)
-    padding_stats = train_dataset.analyze_padding_distribution()
-
     # high_padding_samples = [i for i, ratio in enumerate(padding_stats['label_padding_ratios']) if ratio > 0.7]
     # print(f"High padding samples (>70%): {len(high_padding_samples)} out of {len(padding_stats['label_padding_ratios'])}")
     # for debug
-    return
+    # padding_stats = train_dataset.analyze_padding_distribution()
+    # return
     if os.path.exists(args.test_file):
         logger.info("Loading validation dataset")
         val_dataset = KoBARTSummaryDataset(args.test_file, tokenizer, args.max_len)
