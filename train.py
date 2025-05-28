@@ -12,7 +12,8 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import torch_xla
-from torch_xla.amp import syncfree, autocast, GradScaler
+from torch.cuda.amp import GradScaler
+from torch_xla.amp import syncfree, autocast
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
