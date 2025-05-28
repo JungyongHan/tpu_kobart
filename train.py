@@ -120,9 +120,9 @@ def train_step(model, batch, optimizer, device, scaler):
     labels = batch['labels'].to(device)
     
     # 순전파
-    with autocast(xm.xla_device()):
-        outputs = model(input_ids, decoder_input_ids, labels)
-        loss = outputs.loss
+    # with autocast(xm.xla_device()):
+    outputs = model(input_ids, decoder_input_ids, labels)
+    loss = outputs.loss
     if scaler:
         scaler.scale(loss).backward()
         gradients = xm._fetch_gradients(optimizer)
