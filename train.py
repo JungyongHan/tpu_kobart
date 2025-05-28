@@ -122,12 +122,15 @@ def train_step(model, batch, optimizer, device, scaler):
     with autocast(xm.xla_device()):
         outputs = model(input_ids, decoder_input_ids, labels)
         loss = outputs.loss
-
-    scaler.scale(loss).backward()
-    gradients = xm._fetch_gradients(optimizer)
-    xm.all_reduce('sum', gradients, scale=1.0 / xr.world_size())
-    scaler.step(optimizer)
-    scaler.update()
+    if scaler:
+        scaler.scale(loss).backward()
+        gradients = xm._fetch_gradients(optimizer)
+        xm.all_reduce('sum', gradients, scale=1.0 / xr.world_size())
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        loss.backward()
+        xm.optimizer_step(optimizer)
     
     return loss
 
@@ -184,7 +187,7 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
 
 def train_kobart(rank, args):
     # 시드 설정
-    seed = 42 + rank
+    seed = 42
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -280,7 +283,12 @@ def train_kobart(rank, args):
     model.to(device)
 
     xm.broadcast_master_param(model)
-    scaler = GradScaler()
+    if xm.xla_device_hw(device) == 'TPU':
+        scaler = None
+    else:
+        scaler = GradScaler()
+
+
  
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
