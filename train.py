@@ -12,8 +12,8 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import torch_xla
-from torch.cuda.amp import GradScaler
-from torch_xla.amp import syncfree, autocast
+# from torch.cuda.amp import 
+from torch_xla.amp import syncfree, autocast, GradScaler
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_backend
@@ -284,10 +284,10 @@ def train_kobart(rank, args):
     model.to(device)
 
     xm.broadcast_master_param(model)
-    if xm.xla_device_hw(device) == 'TPU':
-        scaler = None
-    else:
-        scaler = GradScaler()
+    # if xm.xla_device_hw(device) == 'TPU':
+    #     scaler = None
+    # else:
+    scaler = GradScaler(use_zero_grad = True)
 
 
  
