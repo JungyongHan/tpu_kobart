@@ -156,21 +156,13 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
             "train/epoch_loss": epoch_loss,
             "train/epoch": epoch
         })
-    xm.wait_device_ops()
-    if hasattr(model, "module"):
-        state_dict = model.module.state_dict()
-    else:
-        state_dict = model.state_dict()
-    
-    # 옵티마이저, 스케줄러 상태 저장
-    checkpoint_path = os.path.join(args.checkpoint, f'last.pt')
-    xm.save({
-        'model':state_dict,
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch
-    }, checkpoint_path)
 
-    if epoch % args.save_epoch == 0:
+    if epoch % args.save_epoch == 0 or epoch >= args.max_epochs:
+        xm.wait_device_ops()
+        if hasattr(model, "module"):
+            state_dict = model.module.state_dict()
+        else:
+            state_dict = model.state_dict()
         checkpoint_path = os.path.join(args.checkpoint, f'checkpoint_{epoch}.pt')
         xm.save({
             'model':state_dict,
@@ -432,7 +424,7 @@ def train_kobart(rank, args):
         if is_local_master:
             save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss, val_loss)
     xm.rendezvous('init')
-
+    save_checkpoint(model, tokenizer, optimizer, scheduler, epoch + 1, global_step, args, total_loss, val_loss)
     if is_local_master:
         logger.info("Training completed")
         if args.use_wandb and xm.is_master_ordinal(False):
