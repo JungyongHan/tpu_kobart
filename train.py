@@ -113,25 +113,17 @@ class KoBARTSummaryModel(nn.Module):
 
 
 
-def train_step(model, batch, optimizer, device, scaler):
-    # 데이터를 디바이스로 이동
+def train_step(model, batch, optimizer, device):
     input_ids = batch['input_ids'].to(device)
     decoder_input_ids = batch['decoder_input_ids'].to(device)
     labels = batch['labels'].to(device)
     
     # 순전파
-    # with autocast(xm.xla_device()):
     outputs = model(input_ids, decoder_input_ids, labels)
     loss = outputs.loss
-    if scaler:
-        scaler.scale(loss).backward()
-        gradients = xm._fetch_gradients(optimizer)
-        xm.all_reduce('sum', gradients, scale=1.0 / xr.world_size())
-        scaler.step(optimizer)
-        scaler.update()
-    else:
-        loss.backward()
-        xm.optimizer_step(optimizer)
+    
+    # 역전파
+    loss.backward()
     
     return loss
 
@@ -164,7 +156,7 @@ def save_checkpoint(model, tokenizer, optimizer, scheduler, epoch, step, args, e
             "train/epoch_loss": epoch_loss,
             "train/epoch": epoch
         })
-        
+    xm.wait_device_ops()
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
@@ -284,12 +276,6 @@ def train_kobart(rank, args):
     model.to(device)
 
     xm.broadcast_master_param(model)
-    # if xm.xla_device_hw(device) == 'TPU':
-    #     scaler = None
-    # else:
-    scaler = GradScaler(use_zero_grad = True)
-
-
  
     # 옵티마이저 설정
     param_optimizer = list(model.named_parameters())
@@ -415,15 +401,11 @@ def train_kobart(rank, args):
 
         model.train()
         for step, batch in enumerate(train_loader):
-            with torch_xla.step():
-                optimizer.zero_grad()
-                loss = train_step(model, batch, optimizer, device, scaler)
-                
-                # if args.gradient_clip_val > 0:
-                #     torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip_val)
-
-                # xm.optimizer_step(optimizer)
-                scheduler.step()
+            optimizer.zero_grad()
+            loss = train_step(model, batch, optimizer, device)
+            xm.mark_step()
+            xm.optimizer_step(optimizer)
+            scheduler.step()
 
             # 손실 누적 (텐서 상태 유지)
             epoch_loss += loss.detach()
